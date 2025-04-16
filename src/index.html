@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>My Journal</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 2rem;
+      }
+      textarea {
+        width: 100%;
+        height: 200px;
+        margin-bottom: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Journal Entry</h1>
+    <textarea id="entry" placeholder="Write your thoughts..."></textarea>
+    <br />
+    <button onclick="saveEntry()">Save</button>
+    <script type="module">
+      import { writeTextFile, BaseDirectory } from '@tauri-apps/api/fs';
+
+      async function saveEntry() {
+        const text = document.getElementById('entry').value;
+        const date = new Date().toISOString().split('T')[0];
+        await writeTextFile(`${date}.txt`, text, { dir: BaseDirectory.Document });
+        alert('Entry saved!');
+      }
+    </script>
+  </body>
+</html>
