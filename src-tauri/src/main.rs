@@ -42,7 +42,7 @@ fn main() {
     init_db().expect("Failed to initialize database");
 
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![create_entry, read_entries])
+        .invoke_handler(tauri::generate_handler![create_entry, read_entries, get_entry, update_entry])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
