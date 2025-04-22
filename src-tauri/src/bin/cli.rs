@@ -1,5 +1,5 @@
 use moodjourney_lib::db::{
-    init_db, create_entry_with_now, get_entries, get_entry_by_date, update_entry_by_date, delete_entry_by_date,
+    Entry, init_db, add_entry, create_entry_with_now, get_entries, get_entry_by_date, update_entry_by_date, delete_entry_by_date,
 };
 use std::env;
 
@@ -17,6 +17,21 @@ fn main() {
         "init" => {
             init_db().expect("Failed to init DB");
             println!("Database initialized.");
+        }
+        "add" => {
+            let date = args.get(2).expect("Need date");
+            let title = args.get(3).expect("Need title");
+            let content = args.get(4);
+            let password = args.get(5);
+            let entry = Entry {
+                date: date.to_string(),
+                title: title.to_string(),
+                content: content.map(|s| s.to_string()),
+                password: password.map(|s| s.to_string()),
+            };
+
+            let added_entry = add_entry(entry).expect("Failed to add entry");
+            println!("Entry added: {:#?}", added_entry);
         }
         "create" => {
             let title = args.get(2).expect("Need title");

@@ -4,6 +4,7 @@ use rusqlite::{Error};
 use rusqlite::ffi;                   
 use serde::{Deserialize, Serialize};
 use chrono::Local;
+use chrono::NaiveDate;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Entry {
@@ -28,6 +29,16 @@ pub fn init_db() -> Result<()> {
 }
 
 pub fn add_entry(entry: Entry) -> Result<()> {
+    if NaiveDate::parse_from_str(&entry.date, "%Y-%m-%d").is_err() {
+        return Err(Error::SqliteFailure(
+            ffi::Error {
+                code: ffi::ErrorCode::ConstraintViolation,
+                extended_code: ffi::ErrorCode::ConstraintViolation as i32,
+            },
+            Some("Date must be a valid YYYY-MM-DD format".to_string()),
+        ));
+    }
+
     let fetched = get_entry_by_date(entry.date.as_str())?;
     if fetched.is_some() {
         return Err(Error::SqliteFailure(
