@@ -17,18 +17,66 @@ function App() {
     }
   };
 
+  const checkEntries = () => {
+    const date = new Date();
+    const currYear = `${date.getFullYear()}`;
+    const currMonth = date.getMonth() + 1 > 10 ? `${date.getMonth() + 1}` : `0${date.getMonth() + 1}`;
+    const currDay = date.getDate();
+    const currDate = `${currYear}-${currMonth}-${currDay}` //grab current date
+
+    
+    for (let i = 0; i < entries.length; i += 1) {
+      if (entries[i].date === currDate) { //iterate and check through all of entries for same date
+        return true;
+      }
+    }
+    return false;
+  }
+
+  const updateEntry = async () => {
+    const date = new Date();
+    const currYear = `${date.getFullYear()}`;
+    const currMonth = date.getMonth() + 1 > 10 ? `${date.getMonth() + 1}` : `0${date.getMonth() + 1}`;
+    const currDay = date.getDate();
+    const currDate = `${currYear}-${currMonth}-${currDay}`
+    try {
+      const currEntry = await invoke("get_entry", {date: currDate});
+      
+      await invoke("update_entry", {
+        date: currEntry.date, 
+        newTitle: currEntry.title, 
+        newContent: entryText, 
+        newPassword: currEntry.password
+      });
+
+      setEntryText("");
+      setStatus("Entry saved!");
+      fetchEntries();
+    } catch(err) {
+      console.error(err);
+      setStatus("Failed to update entry.");
+    }
+  }
+
   const saveEntry = async () => {
     if (!entryText.trim()) return;
 
     try {
-      await invoke("create_entry", {
-        title: "Journal Entry",
-        content: entryText,
-        password: null, // or you can let the user input this too
-      });
-      setEntryText("");
-      setStatus("Entry saved!");
-      fetchEntries(); // refresh the list
+      
+      if (checkEntries()) {
+        updateEntry();
+      }
+      else {
+        await invoke("create_entry", {
+          title: "Journal Entry",
+          content: entryText,
+          password: null, // or you can let the user input this too
+        });
+        setEntryText("");
+        setStatus("Entry saved!");
+        fetchEntries(); // refresh the list
+      }
+      
     } catch (err) {
       console.error(err);
       setStatus("Failed to save entry.");
