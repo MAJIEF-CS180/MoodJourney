@@ -83,6 +83,15 @@ function App() {
     }
   };
 
+  const handleDelete = async (entry) => {
+    try {
+      await invoke("delete_entry", { date: entry.date });
+      fetchEntries();
+    } catch(err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     fetchEntries();
   }, []);
@@ -114,6 +123,7 @@ function App() {
           <div key={i} style={{ marginBottom: "1em", borderBottom: "1px solid #ccc", paddingBottom: "0.5em" }}>
             <strong>{entry.date}</strong>
             <p>{entry.content}</p>
+            <button onClick={() => handleDelete(entry)}> X </button>
           </div>
         ))}
       </div>
