@@ -19,10 +19,12 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["devtools"] }
-rusqlite = { version = "0.30", features = ["bundled"] }
+tauri = { version = "2.5.0", features = [] }
+rusqlite = { version = "0.35", features = ["bundled"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tauri-plugin-opener = "2.0.0"
 chrono = "0.4"
-
+rust-bert = "0.23.0"
+tokio = { version = "1", features = ["full"] }
+anyhow = "1.0"

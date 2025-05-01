@@ -1,9 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod db;
+mod emotion;
 use db::{
     init_db, create_entry_with_now, get_entries, get_entry_by_date, update_entry_by_date, delete_entry_by_date, Entry,
 };
+use emotion::classify_emotion;
 
 use tauri::{command};
 
@@ -42,7 +44,7 @@ fn main() {
     init_db().expect("Failed to initialize database");
 
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![create_entry, read_entries, get_entry, update_entry])
+        .invoke_handler(tauri::generate_handler![create_entry, read_entries, get_entry, update_entry, classify_emotion])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

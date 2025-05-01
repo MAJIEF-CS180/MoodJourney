@@ -41,16 +41,21 @@ function App() {
     const currDate = `${currYear}-${currMonth}-${currDay}`
     try {
       const currEntry = await invoke("get_entry", {date: currDate});
+
+      const emotion = await invoke("classify_emotion", { text: entryText });
+      console.log("Detected emotion:", emotion);
+
+      const updatedContent = `${entryText}\n\n🧠 Emotion: ${emotion}`; //change later
       
       await invoke("update_entry", {
         date: currEntry.date, 
         newTitle: currEntry.title, 
-        newContent: entryText, 
+        newContent: updatedContent, 
         newPassword: currEntry.password
       });
 
       setEntryText("");
-      setStatus("Entry saved!");
+      setStatus("Entry saved with emotions!"); //change later
       fetchEntries();
     } catch(err) {
       console.error(err);
@@ -62,6 +67,10 @@ function App() {
     if (!entryText.trim()) return;
 
     try {
+      const emotion = await invoke("classify_emotion", { text: entryText });
+      console.log("Detected emotion:", emotion);
+
+      const contentWithEmotion = `${entryText}\n\n🧠 Emotion: ${emotion}`; //change later
       
       if (checkEntries()) {
         updateEntry();
@@ -69,11 +78,11 @@ function App() {
       else {
         await invoke("create_entry", {
           title: "Journal Entry",
-          content: entryText,
+          content: contentWithEmotion,
           password: null, // or you can let the user input this too
         });
         setEntryText("");
-        setStatus("Entry saved!");
+        setStatus("Entry saved with emotions!"); //change later
         fetchEntries(); // refresh the list
       }
       
