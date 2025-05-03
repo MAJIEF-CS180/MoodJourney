@@ -118,6 +118,17 @@ function App() {
     }));
   };
 
+
+  const handleDelete = async (entry) => {
+    try {
+      await invoke("delete_entry", { date: entry.date });
+      fetchEntries();
+    } catch(err) {
+      console.error(err);
+    }
+  };
+
+
   useEffect(() => {
     fetchEntries();
   }, []);
@@ -165,6 +176,7 @@ return (
         >
           <strong>{entry.date}</strong>
           <p>{entry.content}</p>
+          <button onClick={() => handleDelete(entry)}> X </button>
         </div>
       ))}
     </div>
