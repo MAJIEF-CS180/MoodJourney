@@ -18,6 +18,22 @@ function App() {
   const [status, setStatus] = useState(""); //holds message for entry saved or failure to save
   const [reportMode, setReportMode] = useState("week"); // week/month toggle
   const [lastEmotion, setLastEmotion] = useState(""); // for instant feedback from backend testing
+  const [flashColor, setFlashColor] = useState(null); //for flashing the background color when user enters entry.
+
+  const flashBackground = (emotion) => {
+    const colors = {
+      POSITIVE: "#e0fce5", // light green
+      NEGATIVE: "#ffe6e6", // light red
+      default: "#ffffff",
+    };
+  
+    const color = colors[emotion?.toUpperCase()] || colors.default;
+    setFlashColor(color);
+  
+    setTimeout(() => {
+      setFlashColor(null); // Revert back after 1 second
+    }, 1000);
+  };
 
   const fetchEntries = async () => {
     try {
@@ -43,6 +59,7 @@ function App() {
     try {
       const currEntry = await invoke("get_entry", { date: currDate });
       const emotion = await invoke("classify_emotion", { text: entryText });
+      const normalizedEmotion = emotion?.toUpperCase?.() || "NEUTRAL";
       console.log("Detected emotion:", emotion);
 
       const updatedContent = `${entryText}\n\n Emotion: ${emotion}`;
@@ -56,6 +73,8 @@ function App() {
       setEntryText("");
       setStatus("Entry updated with emotion!");
       setLastEmotion(emotion);
+      setLastEmotion(normalizedEmotion);
+      //flashBackground(normalizedEmotion);
       fetchEntries();
     } catch (err) {
       console.error(err);
@@ -68,10 +87,12 @@ function App() {
 
     try {
       const emotion = await invoke("classify_emotion", { text: entryText });
+      const normalizedEmotion = emotion?.toUpperCase?.() || "NEUTRAL";
       console.log("Detected emotion:", emotion);
 
       const contentWithEmotion = `${entryText}\n\n Emotion: ${emotion}`; //change later
-      setLastEmotion(emotion);
+      setLastEmotion(normalizedEmotion);
+      flashBackground(normalizedEmotion);
       
       if (checkEntries()) {
         updateEntry();
@@ -86,7 +107,6 @@ function App() {
         setStatus("Entry saved with emotions!"); 
         fetchEntries(); // refresh the list
       }
-      
     } catch (err) {
       console.error(err);
       setStatus("Failed to save entry.");
@@ -133,9 +153,33 @@ function App() {
     fetchEntries();
   }, []);
 
+  const getMoodStyle = (emotion) => {
+    const styles = {
+      POSITIVE: {
+        label: "You're feeling positve! 😊",
+        bgColor: "#e0f7e9",
+        textColor: "#2e7d32"
+      },
+      NEGATIVE: {
+        label: "Feeling a bit negative 😢",
+        bgColor: "#fde2e2",
+        textColor: "#c62828"
+      },
+      default: {
+        label: "Emotion detected!",
+        bgColor: "#f0f0f0",
+        textColor: "#333"
+      }
+    };
+  
+    return styles[emotion] || styles["default"];
+  };
+  
+
+
 
 return (
-  <div className="container" style={{ padding: "2em", fontFamily: "sans-serif" }}>
+  <div className="container" style={{padding: "2em", fontFamily: "sans-serif", backgroundColor: flashColor || "white", minHeight: "100vh", transition: "background-color 0.5s ease",}}>
     <h1>Mood Journal</h1>
 
     <textarea
@@ -157,10 +201,23 @@ return (
 
     {/* Show last detected emotion for user feedback */}
     {lastEmotion && (
-      <p>
-        <strong>Detected Emotion:</strong> {lastEmotion}
-      </p>
-    )}
+      <div
+      style={{
+        marginTop: "1em",
+        padding: "1em",
+        borderRadius: "8px",
+        backgroundColor: "#fff",
+        color: getMoodStyle(lastEmotion).textColor,
+        border: `1px solid ${getMoodStyle(lastEmotion).textColor}`,
+        fontWeight: "bold",
+        maxWidth: "80%",
+        marginInline: "auto",
+      }}
+    >
+      {getMoodStyle(lastEmotion).label} <br />
+      <small>({lastEmotion})</small>
+      </div>
+)}
 
     <h2>Previous Entries</h2>
     <div style={{ textAlign: "left", maxWidth: "80%", margin: "auto" }}>
