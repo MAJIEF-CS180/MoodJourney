@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { invoke } from "@tauri-apps/api/core";
 
-import { styled, useTheme, ThemeProvider, createTheme } from '@mui/material/styles';
+import { styled, useTheme, ThemeProvider, createTheme, alpha } from '@mui/material/styles';
 import {
     AppBar as MuiAppBar, Box, Button, Drawer as MuiDrawer, List, ListItem,
     ListItemButton, ListItemIcon, ListItemText, Toolbar, Typography,
@@ -21,11 +21,14 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
 import CancelIcon from '@mui/icons-material/Cancel';
-// EmojiEmotionsIcon is no longer needed here as the separate display is removed.
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'; 
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 
 // Constants for drawer width
 const drawerWidth = 240;
 const miniDrawerWidth = 65;
+const INITIAL_VISIBLE_ENTRIES = 5;
+
 
 // Mixin for opened drawer style
 const openedMixin = (theme) => ({
@@ -91,71 +94,80 @@ const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' 
     }),
 );
 
-// SettingsPage component
-function SettingsPage({ darkMode, onDarkModeChange, onBack }) {
+// Combined Settings and About Page
+function CombinedSettingsPage({ darkMode, onDarkModeChange, onBack }) {
+    const theme = useTheme(); 
     return (
-        <Paper
-            sx={{
-                p: 3, width: '100%', maxWidth: '800px', mx: 'auto', flexGrow: 1,
-                overflowY: 'auto', mb: 2, borderRadius: '16px', display: 'flex',
-                flexDirection: 'column',
-            }}
-        >
-            <Box sx={{ mb: 2 }}>
-                <Button startIcon={<ArrowBackIcon />} onClick={onBack} variant="outlined">
+        <>
+            <Box sx={{ mb: 2, alignSelf: 'flex-start', flexShrink: 0 }}>
+                <Button
+                    startIcon={<ArrowBackIcon />}
+                    onClick={onBack} 
+                    variant="outlined"
+                >
                     Back to Journal
                 </Button>
             </Box>
-            <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold' }}>
-                Settings
-            </Typography>
-            <Divider sx={{ mb: 3 }} />
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', mb: 2 }}>
-                <Typography variant="body1" id="dark-mode-label">Dark Mode</Typography>
-                <Switch
-                    checked={darkMode}
-                    onChange={onDarkModeChange}
-                    name="darkModeToggle"
-                    color="primary"
-                    inputProps={{ 'aria-labelledby': 'dark-mode-label' }}
-                />
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, width: '100%', flexGrow: 1, overflow: 'auto' }}>
+                {/* Main Settings Content Area (Larger Box) */}
+                <Paper
+                    sx={{
+                        p: 3,
+                        flex: { xs: '1 1 auto', md: '2 1 0%' },
+                        minWidth: 0,
+                        overflowY: 'auto',
+                        borderRadius: '16px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                    }}
+                >
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', mb: 2, pt: 1 }}>
+                        <Typography variant="body1" id="dark-mode-label" sx={{ fontSize: '1.125rem' }}>
+                            Dark Mode
+                        </Typography>
+                        <Switch
+                            checked={darkMode}
+                            onChange={onDarkModeChange}
+                            name="darkModeToggle"
+                            color="primary"
+                            inputProps={{ 'aria-labelledby': 'dark-mode-label' }}
+                        />
+                    </Box>
+                    <Typography variant="body1" color="text.secondary" sx={{mt: 'auto', pt: 2, fontSize: '1.125rem' }}>
+                        More settings will be available here in the future.
+                    </Typography>
+                </Paper>
+
+                {/* About Information Area (Smaller Box) */}
+                <Paper
+                    sx={{
+                        p: 2.5,
+                        flex: { xs: '1 1 auto', md: '1 1 0%' },
+                        minWidth: 0,
+                        borderRadius: '16px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflowY: 'auto',
+                        borderLeft: { md: `1px solid ${theme.palette.divider}` },
+                    }}
+                >
+                    <Box sx={{ flexGrow: 1, pt: 1 }}>
+                        <Typography variant="body1" sx={{ fontSize: '1.125rem', color: 'text.primary', pt: 1 }}>
+                            MoodJourney v0.10
+                        </Typography>
+                    </Box>
+                </Paper>
             </Box>
-            <Typography variant="body2" color="text.secondary">
-                More settings will be available here in the future.
-            </Typography>
-        </Paper>
+        </>
     );
 }
 
-// AboutPage component
-function AboutPage({ onBack }) {
-    return (
-        <Paper
-            sx={{
-                p: 3, width: '100%', maxWidth: '800px', mx: 'auto', flexGrow: 1,
-                overflowY: 'auto', mb: 2, borderRadius: '16px', display: 'flex',
-                flexDirection: 'column',
-            }}
-        >
-            <Box sx={{ mb: 2 }}>
-                <Button startIcon={<ArrowBackIcon />} onClick={onBack} variant="outlined">
-                    Back to Journal
-                </Button>
-            </Box>
-            <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold' }}>
-                About
-            </Typography>
-            <Divider sx={{ mb: 3 }} />
-            <Typography variant="body1" color="text.primary">
-                MoodJourney v1.00
-            </Typography>
-        </Paper>
-    );
-}
 
 // Base theme options
 const baseThemeOptions = {
-    typography: { fontFamily: '"Inter", Arial, sans-serif' },
+    typography: { 
+        fontFamily: '"Inter", Arial, sans-serif',
+    },
     shape: { borderRadius: 12 },
     components: {
         MuiButton: {
@@ -171,9 +183,9 @@ const baseThemeOptions = {
                 root: ({ theme }) => ({
                     '& .MuiFilledInput-underline:before, & .MuiFilledInput-underline:after, & .MuiFilledInput-underline:hover:not(.Mui-disabled):before': { borderBottom: 'none' },
                     '& .MuiFilledInput-root': {
-                        backgroundColor: theme.palette.action.hover,
+                        backgroundColor: theme.palette.action.hover, 
                         borderRadius: '4px',
-                        '&:hover, &.Mui-focused': { backgroundColor: theme.palette.action.selected }
+                        '&:hover, &.Mui-focused': { backgroundColor: theme.palette.action.selected } 
                     }
                 })
             }
@@ -182,16 +194,16 @@ const baseThemeOptions = {
             defaultProps: { elevation: 0 },
             styleOverrides: {
                 root: ({ theme }) => ({
-                    backgroundColor: theme.palette.background.paper,
-                    border: `1px solid ${theme.palette.divider}`,
+                    backgroundColor: theme.palette.background.paper, 
+                    border: `1px solid ${theme.palette.divider}`,    
                 })
             }
         },
         MuiDrawer: {
             styleOverrides: {
                 paper: ({ theme }) => ({
-                    backgroundColor: theme.palette.background.paper,
-                    borderRight: `1px solid ${theme.palette.divider}`,
+                    backgroundColor: theme.palette.background.paper, 
+                    borderRight: `1px solid ${theme.palette.divider}`, 
                 })
             }
         },
@@ -199,12 +211,30 @@ const baseThemeOptions = {
             defaultProps: { elevation: 0 },
             styleOverrides: {
                 root: ({ theme }) => ({
-                    backgroundColor: theme.palette.background.paper,
-                    color: theme.palette.text.primary,
-                    borderBottom: `1px solid ${theme.palette.divider}`,
+                    backgroundColor: theme.palette.background.paper, 
+                    color: theme.palette.text.primary, 
+                    borderBottom: `1px solid ${theme.palette.divider}`, 
                 })
             }
-        }
+        },
+        MuiAlert: {
+            styleOverrides: {
+                standardSuccess: ({ theme }) => ({
+                    color: theme.palette.primary.main, 
+                    backgroundColor: alpha(theme.palette.primary.main, theme.palette.mode === 'light' ? 0.12 : 0.18), 
+                    '& .MuiAlert-icon': { 
+                        color: theme.palette.primary.main,
+                    },
+                }),
+                standardError: ({ theme }) => ({
+                    color: theme.palette.primary.main, 
+                    backgroundColor: alpha(theme.palette.primary.main, theme.palette.mode === 'light' ? 0.12 : 0.18), 
+                    '& .MuiAlert-icon': { 
+                        color: theme.palette.primary.main,
+                    },
+                }),
+            },
+        },
     }
 };
 
@@ -213,12 +243,21 @@ const lightTheme = createTheme({
     ...baseThemeOptions,
     palette: {
         mode: 'light',
-        primary: { main: '#23325A' },
-        secondary: { main: '#625B71' },
-        background: { default: '#F1F1F1', paper: '#FFFFFF' },
-        text: { primary: 'rgba(0, 0, 0, 0.87)', secondary: 'rgba(0, 0, 0, 0.6)' },
-        action: { hover: 'rgba(0, 0, 0, 0.04)', selected: 'rgba(0, 0, 0, 0.08)' },
-        divider: 'rgba(0, 0, 0, 0.12)',
+        primary: { main: '#23325A' }, // Midnight Blue
+        secondary: { main: '#653666' }, // Wineberry
+        background: { 
+            default: '#F3EEEB', // Sweet Cream - Main app background
+            paper: '#FFFCF9',    // Off-white (very light cream) for paper surfaces
+        },
+        text: { 
+            primary: '#23325A',   // Midnight Blue - Main text color
+            secondary: alpha('#23325A', 0.7), // Lighter Midnight Blue for secondary text
+        },
+        action: { 
+            hover: alpha('#23325A', 0.06), 
+            selected: alpha('#23325A', 0.12), 
+        },
+        divider: alpha('#23325A', 0.2), 
     },
 });
 
@@ -227,12 +266,21 @@ const darkTheme = createTheme({
     ...baseThemeOptions,
     palette: {
         mode: 'dark',
-        primary: { main: '#AEC6FF' },
-        secondary: { main: '#CCC2DC' },
-        background: { default: '#1B1B1B', paper: '#303030' },
-        text: { primary: '#E2E2E2', secondary: 'rgba(230, 225, 229, 0.6)' },
-        action: { hover: 'rgba(255, 255, 255, 0.08)', selected: 'rgba(255, 255, 255, 0.12)' },
-        divider: 'rgba(255, 255, 255, 0.12)',
+        primary: { main: '#F3EEEB' }, // Sweet Cream (light for contrast on dark)
+        secondary: { main: '#DECCCA' }, // Misty Blush (also light for contrast)
+        background: { 
+            default: '#1A2238', // Darker Midnight Blue
+            paper: '#23325A',    // Midnight Blue (for cards, drawer, appbar)
+        },
+        text: { 
+            primary: '#F3EEEB',   // Sweet Cream - Main text color for readability
+            secondary: alpha('#F3EEEB', 0.7), // Lighter Sweet Cream for secondary text
+        },
+        action: { 
+            hover: alpha('#F3EEEB', 0.08), 
+            selected: alpha('#F3EEEB', 0.16), 
+        },
+        divider: alpha('#F3EEEB', 0.12), 
     },
 });
 
@@ -240,83 +288,119 @@ const darkTheme = createTheme({
 // Main App component
 function App() {
     // State hooks
-    const [darkMode, setDarkMode] = useState(false);
+    const [darkMode, setDarkMode] = useState(false); 
     const [entries, setEntries] = useState([]);
     const [selectedEntry, setSelectedEntry] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(true); 
     const [status, setStatus] = useState({ message: "", severity: "info" });
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [hoverOpen, setHoverOpen] = useState(false);
     const [entryText, setEntryText] = useState("");
-    const [saving, setSaving] = useState(false);
+    const [saving, setSaving] = useState(false); 
     const [currentView, setCurrentView] = useState('main');
     const [isEditingSelectedEntry, setIsEditingSelectedEntry] = useState(false);
     const [editedContentText, setEditedContentText] = useState("");
-    // lastDetectedEmotion is still useful internally for constructing status messages
     const [lastDetectedEmotion, setLastDetectedEmotion] = useState(""); 
+    const [flashColor, setFlashColor] = useState(null); 
+    const [showAllEntriesInDrawer, setShowAllEntriesInDrawer] = useState(false); 
 
     const theme = useMemo(() => (darkMode ? darkTheme : lightTheme), [darkMode]);
     const userName = "Michael";
     const isDrawerVisuallyOpen = drawerOpen || hoverOpen;
 
-    // Formats date string
+    const flashBackground = (emotion) => {
+        const emotionUpper = emotion?.toUpperCase(); 
+        let colorToSet = null;
+
+        if (emotionUpper === "POSITIVE") {
+            colorToSet = darkMode ? '#2E7D32' : '#D4EDDA'; 
+        } else if (emotionUpper === "NEGATIVE") {
+            colorToSet = darkMode ? '#C62828' : '#F8D7DA'; 
+        }
+        
+        if (colorToSet) {
+            setFlashColor(colorToSet);
+            setTimeout(() => {
+                setFlashColor(null); 
+            }, 1000);
+        }
+    };
+
+    const extractEmotionFromContent = (content) => {
+        if (!content) return null;
+        const match = content.match(/\n\n🧠 Emotion: (\w+)$/);
+        return match ? match[1] : null;
+    };
+
+    const getContentForDisplay = (content) => {
+        if (!content) return "";
+        return content.replace(/\n\n🧠 Emotion: \w+$/, "");
+    };
+
     const formatDate = (dateString) => {
         if (!dateString) return "Invalid Date";
-        const date = new Date(dateString + 'T00:00:00Z');
+        const date = new Date(dateString + 'T00:00:00Z'); 
         return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
     };
 
-    // Generates greeting
     const getGreeting = (name) => {
         const hour = new Date().getHours();
         const timeOfDay = hour < 12 ? "Good Morning" : hour < 18 ? "Good Afternoon" : "Good Evening";
         return name ? `${timeOfDay}, ${name}` : timeOfDay;
     };
 
-    // Gets current date string
     const getCurrentDateString = () => new Date().toISOString().split('T')[0];
 
-    // Fetches entries
-    const fetchEntries = async () => {
-        setLoading(true);
+    const refreshEntriesList = async () => {
+        setLoading(true); 
+        let freshEntries = [];
         try {
-            const result = await invoke("read_entries");
-            const sorted = (result || []).sort((a, b) => new Date(b.date) - new Date(a.date));
+            freshEntries = (await invoke("read_entries")) || [];
+            const sorted = freshEntries.sort((a, b) => new Date(b.date) - new Date(a.date));
             setEntries(sorted);
         } catch (err) {
-            console.error("Error fetching entries:", err);
-            setStatus({ message: `Error fetching entries: ${err.message || String(err)}`, severity: "error" });
-            setEntries([]);
+            console.error("Error refreshing entries list:", err);
+            setStatus({ message: `Error refreshing entries: ${err.message || String(err)}`, severity: "error" });
+            setEntries([]); 
         } finally {
             setLoading(false);
         }
+        return freshEntries; 
     };
+    
+    useEffect(() => {
+        refreshEntriesList();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
-    // Saves or updates today's entry (from main input field)
+
     const handleSaveEntry = async () => {
         if (!entryText.trim()) {
             setStatus({ message: "Entry cannot be empty.", severity: "warning" });
             return;
         }
-        setSaving(true);
-        let currentStatus = { message: "", severity: "info" }; // Local status for this operation
+        setSaving(true); 
+        let currentStatusObject = { message: "", severity: "info" }; 
         setLastDetectedEmotion(""); 
 
-        let emotionForMessage = ""; // Store emotion specifically for the status message
-        let contentWithEmotion = entryText;
+        let classifiedEmotion = ""; 
+        let contentToSave = entryText;
 
         try {
             const detectedEmotion = await invoke("classify_emotion", { text: entryText });
-            setLastDetectedEmotion(detectedEmotion); // Keep track of it if needed elsewhere or for logic
-            emotionForMessage = detectedEmotion; // Use this for the status message
-            contentWithEmotion = `${entryText}\n\n🧠 Emotion: ${detectedEmotion}`;
+            classifiedEmotion = detectedEmotion; 
+            setLastDetectedEmotion(detectedEmotion); 
+            contentToSave = `${entryText}\n\n🧠 Emotion: ${detectedEmotion}`;
         } catch (classifyError) {
             console.error("Error classifying emotion:", classifyError);
-            // Set a warning status that will be displayed, but proceed with saving
-            currentStatus = { message: `Entry to be saved. Emotion classification failed: ${classifyError.message || String(classifyError)}`, severity: "warning" };
+            currentStatusObject = { message: `Entry to be saved. Emotion classification failed: ${classifyError.message || String(classifyError)}`, severity: "warning" };
+            if (!contentToSave.includes("\n\n🧠 Emotion:")) { 
+                 contentToSave = `${entryText}\n\n🧠 Emotion: unknown`; 
+            }
         }
         
         const currentDate = getCurrentDateString();
+        const originalEntriesCount = entries.length; 
         const existingEntryForToday = entries.find(entry => entry.date === currentDate);
         const operation = existingEntryForToday ? "update_entry" : "create_entry";
         
@@ -325,56 +409,69 @@ function App() {
             payload = { 
                 date: currentDate, 
                 newTitle: existingEntryForToday.title || "Journal Entry", 
-                newContent: contentWithEmotion, 
+                newContent: contentToSave, 
                 newPassword: existingEntryForToday.password 
             };
         } else { 
             payload = { 
                 title: "Journal Entry", 
-                content: contentWithEmotion, 
+                content: contentToSave, 
                 password: null, 
             };
         }
 
         try {
-            await invoke(operation, payload);
-            const successVerb = operation === "create_entry" ? 'saved' : 'updated';
+            await invoke(operation, payload); 
+            const successVerbText = operation === "create_entry" ? "saved" : "updated";
             
-            // Construct success message based on whether emotion was classified
-            if (emotionForMessage && emotionForMessage !== "unknown") {
-                currentStatus = { message: `Entry ${successVerb} successfully! Detected Emotion: ${emotionForMessage.toUpperCase()}`, severity: "success" };
-            } else if (currentStatus.severity !== "warning") { // Don't overwrite classification warning
-                currentStatus = { message: `Entry ${successVerb} successfully!`, severity: "success" };
+            if (classifiedEmotion) { 
+                flashBackground(classifiedEmotion);
             }
-            // If a classification warning was set, it will be preserved unless a save success happens.
-            // If classification failed BUT save succeeded, the warning about classification is more informative.
-            // However, user wants "Entry saved successfully! Detected Emotion: POSITIVE"
-            // So, if save is successful, we prioritize that message structure.
 
-            setEntryText("");
-            await fetchEntries();
+            if (classifiedEmotion && classifiedEmotion.toLowerCase() !== "unknown") {
+                currentStatusObject = { message: `Entry ${successVerbText} successfully! Detected Emotion: ${classifiedEmotion.toUpperCase()}`, severity: "success" };
+            } else if (currentStatusObject.severity !== "warning") { 
+                currentStatusObject = { message: `Entry ${successVerbText} successfully!`, severity: "success" };
+            }
 
-            const updatedEntriesList = await invoke("read_entries");
-            const currentEntryAfterSave = updatedEntriesList.find(entry => entry.date === currentDate);
-            setSelectedEntry(currentEntryAfterSave || null);
-            if (currentEntryAfterSave) { 
-                setCurrentView('main');
+            setEntryText(""); 
+            setShowAllEntriesInDrawer(false); 
+
+            const allEntriesAfterOperation = await refreshEntriesList(); 
+            let entryToSelect = null;
+
+            if (operation === "create_entry") {
+                entryToSelect = allEntriesAfterOperation.find(e => e.date === currentDate);
+                if (!entryToSelect && allEntriesAfterOperation.length > originalEntriesCount && allEntriesAfterOperation.length > 0) {
+                    console.warn(`Newly created entry not found by date '${currentDate}'. Selecting newest entry ('${allEntriesAfterOperation[0].date}') as a fallback.`);
+                    entryToSelect = allEntriesAfterOperation[0]; 
+                }
+            } else { 
+                entryToSelect = allEntriesAfterOperation.find(entry => entry.date === currentDate);
+            }
+            
+            if (entryToSelect) {
+                setSelectedEntry(entryToSelect); 
+                setCurrentView('main'); 
                 setIsEditingSelectedEntry(false); 
+            } else {
+                if (currentStatusObject.severity === "success") { 
+                     currentStatusObject = { message: `Entry ${successVerbText} successfully, but could not automatically display it. Please select it from the list.`, severity: "info" }; 
+                }
             }
+
         } catch (err) {
-            console.error(`Error ${operation === "create_entry" ? 'saving' : 'updating'} entry:`, err);
-            // If save/update fails, this error is more critical than a classification warning
-            currentStatus = { message: `Failed to ${operation === "create_entry" ? 'save' : 'update'} entry: ${err.message || String(err)}`, severity: "error" };
+            console.error(`Error ${operation} entry:`, err);
+            currentStatusObject = { message: `Failed to ${operation === "create_entry" ? 'save' : 'update'} entry: ${err.message || String(err)}`, severity: "error" };
         } finally {
-            setStatus(currentStatus); // Set the final status for the Alert
-            setSaving(false);
+            setStatus(currentStatusObject); 
+            setSaving(false); 
         }
     };
 
-    // Starts editing a selected entry
     const handleStartEditSelectedEntry = () => {
         if (selectedEntry) {
-            const contentWithoutEmotion = selectedEntry.content.replace(/\n\n🧠 Emotion: \w+$/, "");
+            const contentWithoutEmotion = getContentForDisplay(selectedEntry.content);
             setEditedContentText(contentWithoutEmotion);
             setIsEditingSelectedEntry(true);
             setStatus({ message: "", severity: "info" }); 
@@ -382,7 +479,6 @@ function App() {
         }
     };
 
-    // Cancels editing a selected entry
     const handleCancelEditSelectedEntry = () => {
         setIsEditingSelectedEntry(false);
         setEditedContentText(""); 
@@ -390,69 +486,73 @@ function App() {
         setLastDetectedEmotion("");
     };
 
-    // Confirms and saves changes to a selected (older) entry
     const handleConfirmUpdateSelectedEntry = async () => {
         if (!selectedEntry || !editedContentText.trim()) {
             setStatus({ message: "Content cannot be empty.", severity: "warning" });
             return;
         }
         setSaving(true); 
-        let currentStatus = { message: "", severity: "info" };
+        let currentStatusObject = { message: "", severity: "info" }; 
         setLastDetectedEmotion("");
 
-        let emotionForMessage = "";
-        let contentWithEmotion = editedContentText;
+        let classifiedEmotion = ""; 
+        let contentToSave = editedContentText;
 
         try {
             const detectedEmotion = await invoke("classify_emotion", { text: editedContentText });
+            classifiedEmotion = detectedEmotion;
             setLastDetectedEmotion(detectedEmotion);
-            emotionForMessage = detectedEmotion;
-            contentWithEmotion = `${editedContentText}\n\n🧠 Emotion: ${detectedEmotion}`;
+            contentToSave = `${editedContentText}\n\n🧠 Emotion: ${detectedEmotion}`;
         } catch (classifyError) {
             console.error("Error classifying emotion during edit:", classifyError);
-            currentStatus = { message: `Update to be saved. Emotion classification failed: ${classifyError.message || String(classifyError)}`, severity: "warning" };
+            currentStatusObject = { message: `Update to be saved. Emotion classification failed: ${classifyError.message || String(classifyError)}`, severity: "warning" };
+            if (!contentToSave.includes("\n\n🧠 Emotion:")) {
+                 contentToSave = `${editedContentText}\n\n🧠 Emotion: unknown`;
+            }
         }
 
         try {
-            await invoke("update_entry", {
+            await invoke("update_entry", { 
                 date: selectedEntry.date,
                 newTitle: selectedEntry.title || "Journal Entry", 
-                newContent: contentWithEmotion, 
+                newContent: contentToSave, 
                 newPassword: selectedEntry.password, 
             });
-            
-            if (emotionForMessage && emotionForMessage !== "unknown") {
-                 currentStatus = { message: `Entry updated successfully! Detected Emotion: ${emotionForMessage.toUpperCase()}`, severity: "success" };
-            } else if (currentStatus.severity !== "warning") {
-                 currentStatus = { message: "Entry updated successfully!", severity: "success" };
+
+            if (classifiedEmotion) { 
+                 flashBackground(classifiedEmotion);
             }
             
-            await fetchEntries(); 
-
-            const updatedEntriesList = await invoke("read_entries");
-            const newlyUpdatedEntry = updatedEntriesList.find(entry => entry.date === selectedEntry.date);
-            setSelectedEntry(newlyUpdatedEntry || null); 
+            if (classifiedEmotion && classifiedEmotion.toLowerCase() !== "unknown") {
+                 currentStatusObject = { message: `Entry updated successfully! Detected Emotion: ${classifiedEmotion.toUpperCase()}`, severity: "success" };
+            } else if (currentStatusObject.severity !== "warning") {
+                 currentStatusObject = { message: "Entry updated successfully!", severity: "success" };
+            }
+            
+            const allEntriesAfterUpdate = await refreshEntriesList(); 
+            const entryToSelect = allEntriesAfterUpdate.find(entry => entry.date === selectedEntry.date);
+            
+            setSelectedEntry(entryToSelect || null); 
 
             setIsEditingSelectedEntry(false); 
             setEditedContentText(""); 
         } catch (err) {
             console.error("Error updating entry:", err);
-            currentStatus = { message: `Failed to update entry: ${err.message || String(err)}`, severity: "error" };
+            currentStatusObject = { message: `Failed to update entry: ${err.message || String(err)}`, severity: "error" };
         } finally {
-            setStatus(currentStatus);
-            setSaving(false);
+            setStatus(currentStatusObject);
+            setSaving(false); 
         }
     };
 
-    // Handles deleting an entry
     const handleDeleteEntry = async (entryToDelete) => {
         if (!entryToDelete || !entryToDelete.date) {
             setStatus({ message: "Cannot delete: Invalid entry data.", severity: "error" });
             return;
         }
         
-        setSaving(true);
-        setStatus({ message: "", severity: "info" });
+        setSaving(true); 
+        setStatus({ message: "", severity: "info" }); 
         setLastDetectedEmotion("");
         try {
             await invoke("delete_entry", { date: entryToDelete.date }); 
@@ -463,17 +563,15 @@ function App() {
                 setEditedContentText("");
             }
 
-            await fetchEntries();
+            const remainingEntries = await refreshEntriesList();
+            setShowAllEntriesInDrawer(false); 
 
             if (selectedEntry && selectedEntry.date === entryToDelete.date) {
-                setSelectedEntry(null);
+                setSelectedEntry(null); 
                 setEntryText(""); 
                 handleNewEntryClick(); 
-            } else {
-                const currentEntries = await invoke("read_entries"); 
-                if (currentEntries.length === 0) {
-                    handleNewEntryClick();
-                }
+            } else if (remainingEntries.length === 0) {
+                 handleNewEntryClick(); 
             }
         } catch (err) {
             console.error("Error deleting entry:", err);
@@ -483,25 +581,22 @@ function App() {
         }
     };
 
-    // Drawer control handlers
     const handleDrawerOpen = () => setDrawerOpen(true);
     const handleDrawerClose = () => setDrawerOpen(false);
     const handleDrawerHoverOpen = () => !drawerOpen && setHoverOpen(true);
     const handleDrawerHoverClose = () => setHoverOpen(false);
     const handleCloseStatus = () => setStatus({ message: "", severity: "info" });
 
-    // Handles selecting an entry
     const handleEntrySelect = (entry) => {
         setSelectedEntry(entry);
         setIsEditingSelectedEntry(false); 
         setEditedContentText(""); 
         setEntryText(""); 
-        setStatus({ message: "", severity: "info" });
+        setStatus({ message: "", severity: "info" }); 
         setLastDetectedEmotion(""); 
         setCurrentView('main');
     };
 
-    // Handles "New Entry" click
     const handleNewEntryClick = () => {
         setSelectedEntry(null);
         setIsEditingSelectedEntry(false);
@@ -510,40 +605,29 @@ function App() {
         setStatus({ message: "", severity: "info" });
         setLastDetectedEmotion(""); 
         setCurrentView('main');
+        setShowAllEntriesInDrawer(false); 
     };
 
-    // Navigation handlers
     const handleSettingsClick = () => {
-        setCurrentView('settings');
-        setSelectedEntry(null);
+        setCurrentView('settings'); 
+        setSelectedEntry(null); 
         setIsEditingSelectedEntry(false);
         setStatus({ message: "", severity: "info" });
         setLastDetectedEmotion("");
     };
 
-    const handleAboutClick = () => {
-        setCurrentView('about');
-        setSelectedEntry(null);
-        setIsEditingSelectedEntry(false);
-        setStatus({ message: "", severity: "info" });
-        setLastDetectedEmotion("");
-    };
-
-    // Dark mode toggle
     const handleDarkModeChange = (event) => {
         setDarkMode(event.target.checked);
     };
 
-    // Initial fetch of entries
-    useEffect(() => {
-        fetchEntries();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    const handleToggleShowEntries = () => {
+        setShowAllEntriesInDrawer(prevShowAll => !prevShowAll);
+    };
 
-    // Drawer content
+
     const drawerContent = (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <Box>
+            <Box sx={{ flexGrow: 1, overflowY: 'auto' }}>
                 {drawerOpen && (
                     <Toolbar sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', px: [1] }}>
                         <IconButton onClick={handleDrawerClose} color="inherit">
@@ -563,8 +647,8 @@ function App() {
                             justifyContent: isDrawerVisuallyOpen ? 'flex-start' : 'center',
                             borderRadius: '16px',
                             padding: '8px',
-                            minWidth: 0,
-                            '& .MuiButton-startIcon': { m: isDrawerVisuallyOpen ? '0 8px 0 -4px' : '0' },
+                            minWidth: 0, 
+                            '& .MuiButton-startIcon': { m: isDrawerVisuallyOpen ? '0 8px 0 -4px' : '0' }, 
                         }}
                     >
                         {isDrawerVisuallyOpen && 'New Entry'}
@@ -579,7 +663,7 @@ function App() {
                 {isDrawerVisuallyOpen && (loading || entries.length > 0) && <Divider />}
 
                 <List sx={{ pt: 0 }}>
-                    {loading && isDrawerVisuallyOpen && (
+                    {loading && isDrawerVisuallyOpen && ( 
                         <ListItem sx={{ justifyContent: 'center' }}><CircularProgress size={24} /></ListItem>
                     )}
                     {!loading && entries.length === 0 && isDrawerVisuallyOpen && (
@@ -590,14 +674,14 @@ function App() {
                             </ListItemButton>
                         </ListItem>
                     )}
-                    {!loading && isDrawerVisuallyOpen && entries.map((entry) => (
+                    {!loading && isDrawerVisuallyOpen && entries.slice(0, showAllEntriesInDrawer ? entries.length : INITIAL_VISIBLE_ENTRIES).map((entry) => (
                         <ListItem key={entry.date} disablePadding>
                             <ListItemButton
                                 selected={selectedEntry?.date === entry.date && currentView === 'main' && !isEditingSelectedEntry}
                                 onClick={() => handleEntrySelect(entry)}
                                 sx={{
                                     minHeight: 48, justifyContent: 'initial', px: 2.5,
-                                    '&.Mui-selected': {
+                                    '&.Mui-selected': { 
                                         bgcolor: 'action.selected',
                                         '&:hover': { bgcolor: 'action.hover' }
                                     }
@@ -609,23 +693,36 @@ function App() {
                         </ListItem>
                     ))}
                 </List>
+                {isDrawerVisuallyOpen && !loading && entries.length > INITIAL_VISIBLE_ENTRIES && (
+                    <Box sx={{ p: 1, display: 'flex', justifyContent: 'center' }}>
+                        <Button 
+                            onClick={handleToggleShowEntries} 
+                            variant="text" 
+                            size="small"
+                            endIcon={showAllEntriesInDrawer ? <ExpandLessIcon /> : <ExpandMoreIcon/>}
+                            sx={{ textTransform: 'none', color: 'text.secondary' }}
+                        >
+                            {/* MODIFIED: Button text changed here */}
+                            {showAllEntriesInDrawer ? 'Show Less' : 'Show More'}
+                        </Button>
+                    </Box>
+                )}
             </Box>
 
-            <Box sx={{ marginTop: 'auto' }}>
+            <Box sx={{ marginTop: 'auto', flexShrink: 0 }}>
                 <Divider />
                 <List>
                     {[
                         { text: 'Settings', icon: <SettingsIcon />, handler: handleSettingsClick, view: 'settings' },
-                        { text: 'About', icon: <InfoIcon />, handler: handleAboutClick, view: 'about' },
                     ].map((item) => (
                         <ListItem key={item.text} disablePadding>
                             <ListItemButton
                                 onClick={item.handler}
-                                title={item.text}
+                                title={item.text} 
                                 selected={currentView === item.view}
                                 sx={{
                                     minHeight: 48, justifyContent: isDrawerVisuallyOpen ? 'initial' : 'center', px: 2.5,
-                                    '&.Mui-selected': {
+                                    '&.Mui-selected': { 
                                         bgcolor: 'action.selected',
                                         '&:hover': { bgcolor: 'action.hover' }
                                     }
@@ -643,11 +740,15 @@ function App() {
         </Box>
     );
 
-    // Main application layout
     return (
         <ThemeProvider theme={theme}>
             <CssBaseline />
-            <Box sx={{ display: 'flex', height: '100vh', bgcolor: 'background.default' }}>
+            <Box sx={{ 
+                display: 'flex', 
+                height: '100vh', 
+                bgcolor: flashColor || theme.palette.background.default, 
+                transition: 'background-color 0.5s ease', 
+            }}>
                 <AppBar position="fixed" isPinnedOpen={drawerOpen}>
                     <Toolbar>
                         <IconButton
@@ -655,14 +756,13 @@ function App() {
                             aria-label="open drawer"
                             onClick={handleDrawerOpen}
                             edge="start"
-                            sx={{ mr: 5, ...(drawerOpen && { display: 'none' }) }}
+                            sx={{ mr: 5, ...(drawerOpen && { display: 'none' }) }} 
                         >
                             <MenuIcon />
                         </IconButton>
                         <Typography variant="h6" noWrap component="div">
-                            {currentView === 'settings' ? 'Settings'
-                                : currentView === 'about' ? 'About'
-                                    : selectedEntry ? (isEditingSelectedEntry ? `Editing: ${formatDate(selectedEntry.date)}` : formatDate(selectedEntry.date))
+                            {currentView === 'settings' ? 'Settings' 
+                                : selectedEntry ? (isEditingSelectedEntry ? `Editing: ${formatDate(selectedEntry.date)}` : formatDate(selectedEntry.date))
                                         : "MoodJourney"}
                         </Typography>
                     </Toolbar>
@@ -681,114 +781,136 @@ function App() {
                     component="main"
                     sx={{
                         flexGrow: 1, p: 3, display: 'flex', flexDirection: 'column',
-                        justifyContent: currentView !== 'main' || selectedEntry ? 'flex-start' : 'flex-end',
-                        height: '100%', overflow: 'hidden'
+                        justifyContent: (currentView === 'main' && selectedEntry) || currentView === 'settings' ? 'flex-start' : 'flex-end',
+                        height: '100%', overflow: 'hidden' 
                     }}
                 >
-                    <Toolbar />
+                    <Toolbar /> 
 
-                    {status.message && status.severity !== "info" && (
+                    {status.message && status.severity !== "info" && ( 
                         <Alert
-                            severity={status.severity}
+                            severity={status.severity} 
                             sx={{ mb: 2, width: '100%', maxWidth: '800px', mx: 'auto', flexShrink: 0 }}
-                            onClose={handleCloseStatus}
+                            onClose={handleCloseStatus} 
                         >
                             {status.message}
                         </Alert>
                     )}
 
                     {currentView === 'settings' ? (
-                        <SettingsPage darkMode={darkMode} onDarkModeChange={handleDarkModeChange} onBack={handleNewEntryClick} />
-                    ) : currentView === 'about' ? (
-                        <AboutPage onBack={handleNewEntryClick} />
-                    ) : selectedEntry ? (
-                        // Display selected entry (view or edit mode)
-                        <Paper
-                            sx={{
-                                p: 3, width: '100%', maxWidth: '800px', mx: 'auto', flexGrow: 1,
-                                overflowY: 'auto', mb: 2, borderRadius: '16px', display: 'flex',
-                                flexDirection: 'column',
-                            }}
-                        >
-                            <Box sx={{ mb: 2, flexShrink: 0, width: '100%' }}>
-                                <Button 
-                                    startIcon={<ArrowBackIcon />} 
-                                    onClick={handleNewEntryClick} 
-                                    variant="outlined" 
-                                    sx={{ mb: 1.5 }} 
+                        <CombinedSettingsPage darkMode={darkMode} onDarkModeChange={handleDarkModeChange} onBack={handleNewEntryClick} />
+                    ) : selectedEntry && currentView === 'main' ? ( 
+                        <>
+                            <Box sx={{ mb: 2, alignSelf: 'flex-start', flexShrink: 0 }}> 
+                                <Button
+                                    startIcon={<ArrowBackIcon />}
+                                    onClick={handleNewEntryClick}
+                                    variant="outlined"
                                 >
                                     Back to Journal
                                 </Button>
-                                <Typography variant="h5" sx={{ fontWeight: 'bold', textAlign: 'left', width: '100%' }}>
-                                    {isEditingSelectedEntry ? `Editing Entry` : formatDate(selectedEntry.date)}
-                                </Typography>
                             </Box>
-                            <Divider sx={{ mb: 3, flexShrink: 0 }} />
+                            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, width: '100%', flexGrow: 1, overflow: 'auto' }}>
+                                <Paper
+                                    sx={{
+                                        p: 3,
+                                        flex: { xs: '1 1 auto', md: '2 1 0%' }, 
+                                        minWidth: 0, 
+                                        overflowY: 'auto', 
+                                        borderRadius: '16px',
+                                        display: 'flex',
+                                        flexDirection: 'column', 
+                                    }}
+                                >
+                                    {isEditingSelectedEntry ? (
+                                        <>
+                                            <TextField
+                                                value={editedContentText} 
+                                                onChange={(e) => setEditedContentText(e.target.value)}
+                                                multiline
+                                                minRows={10} 
+                                                fullWidth
+                                                variant="outlined" 
+                                                sx={{ 
+                                                    fontSize: '1.125rem', 
+                                                    mb: 2, 
+                                                    flexGrow: 1, 
+                                                    '& .MuiOutlinedInput-root': { borderRadius: '8px' },
+                                                    pt: selectedEntry ? 0.5 : 0, 
+                                                }}
+                                                placeholder="Edit your thoughts here..."
+                                            />
+                                            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 'auto', pt: 2, flexShrink: 0 }}>
+                                                <Button variant="outlined" color="inherit" startIcon={<CancelIcon />} onClick={handleCancelEditSelectedEntry} disabled={saving}>
+                                                    Cancel
+                                                </Button>
+                                                <Button variant="contained" color="primary" startIcon={<SaveIcon />} onClick={handleConfirmUpdateSelectedEntry} disabled={saving || !editedContentText.trim()}>
+                                                    Save Changes
+                                                </Button>
+                                            </Box>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Typography 
+                                                variant="body1" 
+                                                sx={{ 
+                                                    fontSize: '1.125rem', 
+                                                    whiteSpace: 'pre-wrap', 
+                                                    wordBreak: 'break-word', 
+                                                    flexGrow: 1, 
+                                                    mb: 2, 
+                                                    overflowY: 'auto', 
+                                                    pt: 1 
+                                                }}
+                                            >
+                                                {getContentForDisplay(selectedEntry.content)}
+                                            </Typography>
+                                            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 'auto', pt: 2, flexShrink: 0 }}>
+                                                <Button variant="outlined" startIcon={<EditIcon />} onClick={handleStartEditSelectedEntry} disabled={saving}>
+                                                    Edit Entry
+                                                </Button>
+                                                <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => handleDeleteEntry(selectedEntry)} disabled={saving}>
+                                                    Delete Entry
+                                                </Button>
+                                            </Box>
+                                        </>
+                                    )}
+                                </Paper>
 
-                            {isEditingSelectedEntry ? (
-                                // EDITING MODE for selected entry
-                                <>
-                                    <TextField
-                                        value={editedContentText}
-                                        onChange={(e) => setEditedContentText(e.target.value)}
-                                        multiline
-                                        minRows={10} 
-                                        fullWidth
-                                        variant="outlined" 
-                                        sx={{ mb: 2, flexGrow: 1, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                                        placeholder="Edit your thoughts here..."
-                                    />
-                                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 'auto', pt: 2, flexShrink: 0 }}>
-                                        <Button
-                                            variant="outlined"
-                                            color="inherit"
-                                            startIcon={<CancelIcon />}
-                                            onClick={handleCancelEditSelectedEntry}
-                                            disabled={saving}
-                                        >
-                                            Cancel
-                                        </Button>
-                                        <Button
-                                            variant="contained"
-                                            color="primary"
-                                            startIcon={<SaveIcon />}
-                                            onClick={handleConfirmUpdateSelectedEntry}
-                                            disabled={saving || !editedContentText.trim()}
-                                        >
-                                            Save Changes
-                                        </Button>
-                                    </Box>
-                                </>
-                            ) : (
-                                // VIEW MODE for selected entry
-                                <>
-                                    <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', flexGrow: 1, mb: 2 }}>
-                                        {selectedEntry.content} 
-                                    </Typography>
-                                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 'auto', pt: 2, flexShrink: 0 }}>
-                                        <Button
-                                            variant="outlined"
-                                            startIcon={<EditIcon />}
-                                            onClick={handleStartEditSelectedEntry}
-                                            disabled={saving} 
-                                        >
-                                            Edit Entry
-                                        </Button>
-                                        <Button
-                                            variant="outlined"
-                                            color="error"
-                                            startIcon={<DeleteIcon />}
-                                            onClick={() => handleDeleteEntry(selectedEntry)}
-                                            disabled={saving}
-                                        >
-                                            Delete Entry
-                                        </Button>
-                                    </Box>
-                                </>
-                            )}
-                        </Paper>
-                    ) : (
-                        // New entry input area (main screen when no entry is selected)
+                                {selectedEntry && ( 
+                                    <Paper
+                                        sx={{
+                                            p: 2.5, 
+                                            flex: { xs: '1 1 auto', md: '1 1 0%' }, 
+                                            minWidth: 0, 
+                                            borderRadius: '16px',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            overflowY: 'auto', 
+                                            borderLeft: {md: `1px solid ${theme.palette.divider}`}, 
+                                        }}
+                                    >
+                                        <Box sx={{ flexGrow: 1, pt:1 }}>
+                                            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'medium', fontSize: '1.1rem' }}> 
+                                                Detected Emotion:
+                                            </Typography>
+                                            <Typography variant="body1" sx={{ fontSize: '1.2rem', mb: 2.5, color: extractEmotionFromContent(selectedEntry.content) ? 'text.primary' : 'text.secondary', textTransform: 'capitalize' }}> 
+                                                {extractEmotionFromContent(selectedEntry.content) || "Not available"}
+                                            </Typography>
+
+                                            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'medium', fontSize: '1.1rem' }}> 
+                                                Suggestions:
+                                            </Typography>
+                                            <Typography variant="body1" sx={{ fontSize: '1.2rem', color: 'text.secondary' }}> 
+                                                No suggestions available at the moment.
+                                            </Typography>
+                                        </Box>
+                                    </Paper>
+                                )}
+                            </Box>
+                           
+                        </>
+                    ) : ( 
                         <>
                             <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
                                 <Typography variant="h4" color="text.secondary" sx={{ fontWeight: 'bold' }}>
@@ -804,22 +926,22 @@ function App() {
                                         minRows={4}
                                         value={entryText}
                                         onChange={(e) => setEntryText(e.target.value)}
-                                        variant="standard"
+                                        variant="standard" 
                                         fullWidth
-                                        InputProps={{ disableUnderline: true }}
-                                        sx={{ flexGrow: 1, mb: 1, fontSize: '1rem', p: 1, borderRadius: '4px' }}
+                                        InputProps={{ disableUnderline: true }} 
+                                        sx={{ 
+                                            flexGrow: 1, 
+                                            mb: 1, 
+                                            fontSize: '1.125rem', 
+                                            p: 1, 
+                                            borderRadius: '4px' 
+                                        }}
                                     />
-                                    {/* REMOVED: Dedicated emotion display below text input */}
-                                    {/* {lastDetectedEmotion && (
-                                        <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', p: 1, color: 'text.secondary' }}>
-                                            <EmojiEmotionsIcon sx={{ mr: 0.5, fontSize: '1rem' }} /> Detected Emotion: {lastDetectedEmotion}
-                                        </Typography>
-                                    )} */}
                                     <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
                                         <IconButton
                                             color="primary"
                                             onClick={handleSaveEntry}
-                                            disabled={saving || !entryText.trim()}
+                                            disabled={saving || !entryText.trim()} 
                                             size="large"
                                         >
                                             {saving ? <CircularProgress size={24} color="inherit" /> : <SendIcon />}
