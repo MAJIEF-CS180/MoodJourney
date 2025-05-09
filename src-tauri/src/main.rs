@@ -2,12 +2,13 @@
 
 mod db;
 mod emotion;
+mod dictation;
 use db::{
     init_db, create_entry_with_now, get_entries, get_entry_by_date, update_entry_by_date, delete_entry_by_date, Entry,
 };
 use emotion::classify_emotion;
 
-use tauri::{command};
+use tauri::{command, AppHandle};
 
 // automatically creates entry with current local date
 // content and password are optional
@@ -40,11 +41,31 @@ fn delete_entry(date: &str) -> Result<(), String> {
     delete_entry_by_date(date).map_err(|e| e.to_string())
 }
 
+// dictation function
+#[command]
+async fn perform_dictation(
+    app_handle: AppHandle,
+    audio_file_path: String,
+) -> Result<String, String> {
+    println!("Attempting to transcribe audio file: {}", audio_file_path);
+    tokio::task::spawn_blocking(move || {
+        let model_name = "ggml-small.en.bin";
+        dictation::transcribe_audio_file(&app_handle, &audio_file_path, model_name)
+    })
+    .await
+    .map_err(|e| format!("Task join error during transcription: {}", e))?
+    .map_err(|e| {
+        eprintln!("Transcription error: {}", e);
+        e
+    })
+}
+
 fn main() {
     init_db().expect("Failed to initialize database");
 
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![create_entry, read_entries, get_entry, update_entry, classify_emotion, delete_entry])
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![create_entry, read_entries, get_entry, update_entry, classify_emotion, delete_entry, perform_dictation])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

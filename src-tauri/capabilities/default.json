@@ -8,6 +8,7 @@
     "core:path:default",
     "core:resources:default",
     "core:webview:default",
-    "core:window:default"
+    "core:window:default",
+    "dialog:allow-open"
   ]
 }
