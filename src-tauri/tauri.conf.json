@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "moodjourney",
+        "title": "MoodJourney",
         "width": 800,
         "height": 600
       }
