@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { invoke } from "@tauri-apps/api/core";
-// We'll use tauri's dialog API to select the audio file for dictation
-// It will be imported dynamically in the handler function to keep initial load small.
 
 import { styled, useTheme, ThemeProvider, createTheme, alpha } from '@mui/material/styles';
 import {
@@ -18,23 +16,20 @@ import ArticleIcon from '@mui/icons-material/Article';
 import SendIcon from '@mui/icons-material/Send';
 import SettingsIcon from '@mui/icons-material/Settings';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-// import InfoIcon from '@mui/icons-material/Info'; // Keep if used elsewhere, or remove
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
 import CancelIcon from '@mui/icons-material/Cancel';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import MicIcon from '@mui/icons-material/Mic'; // Added Microphone Icon
+import MicIcon from '@mui/icons-material/Mic';
 
-// Constants for drawer width
 const drawerWidth = 240;
 const miniDrawerWidth = 65;
 const INITIAL_VISIBLE_ENTRIES = 5;
-const ALERT_TIMEOUT_DURATION = 10000; // 10 seconds in milliseconds
+const ALERT_TIMEOUT_DURATION = 10000;
 
 
-// Mixin for opened drawer style
 const openedMixin = (theme) => ({
     width: drawerWidth,
     transition: theme.transitions.create('width', {
@@ -44,7 +39,6 @@ const openedMixin = (theme) => ({
     overflowX: 'hidden',
 });
 
-// Mixin for closed drawer style
 const closedMixin = (theme) => ({
     transition: theme.transitions.create('width', {
         easing: theme.transitions.easing.sharp,
@@ -54,7 +48,6 @@ const closedMixin = (theme) => ({
     width: `${miniDrawerWidth}px`,
 });
 
-// Styled AppBar component
 const AppBar = styled(MuiAppBar, {
     shouldForwardProp: (prop) => prop !== 'isPinnedOpen',
 })(({ theme, isPinnedOpen }) => ({
@@ -73,7 +66,6 @@ const AppBar = styled(MuiAppBar, {
     }),
 }));
 
-// Styled Drawer component
 const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' })(
     ({ theme, open }) => ({
         width: drawerWidth,
@@ -98,7 +90,6 @@ const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' 
     }),
 );
 
-// Combined Settings and About Page
 function CombinedSettingsPage({ darkMode, onDarkModeChange, onBack }) {
     const theme = useTheme();
     return (
@@ -113,7 +104,6 @@ function CombinedSettingsPage({ darkMode, onDarkModeChange, onBack }) {
                 </Button>
             </Box>
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, width: '100%', flexGrow: 1, overflow: 'auto' }}>
-                {/* Main Settings Content Area (Larger Box) */}
                 <Paper
                     sx={{
                         p: 3,
@@ -142,7 +132,6 @@ function CombinedSettingsPage({ darkMode, onDarkModeChange, onBack }) {
                     </Typography>
                 </Paper>
 
-                {/* About Information Area (Smaller Box) */}
                 <Paper
                     sx={{
                         p: 2.5,
@@ -166,8 +155,6 @@ function CombinedSettingsPage({ darkMode, onDarkModeChange, onBack }) {
     );
 }
 
-
-// Base theme options
 const baseThemeOptions = {
     typography: {
         fontFamily: '"Inter", Arial, sans-serif',
@@ -231,13 +218,12 @@ const baseThemeOptions = {
                     },
                 }),
                 standardError: ({ theme }) => ({
-                    color: theme.palette.primary.main, // Using primary for error as well, consider theme.palette.error.main
-                    backgroundColor: alpha(theme.palette.primary.main, theme.palette.mode === 'light' ? 0.12 : 0.18), // Consider theme.palette.error.light
+                    color: theme.palette.primary.main,
+                    backgroundColor: alpha(theme.palette.primary.main, theme.palette.mode === 'light' ? 0.12 : 0.18),
                     '& .MuiAlert-icon': {
-                        color: theme.palette.primary.main, // Consider theme.palette.error.main
+                        color: theme.palette.primary.main,
                     },
                 }),
-                 // Add styles for warning and info if needed, or ensure they use defaults
                 standardWarning: ({ theme }) => ({
                     color: theme.palette.mode === 'light' ? theme.palette.warning.dark : theme.palette.warning.light,
                     backgroundColor: alpha(theme.palette.warning.main, theme.palette.mode === 'light' ? 0.12 : 0.18),
@@ -306,10 +292,7 @@ const darkTheme = createTheme({
     },
 });
 
-
-// Main App component
 function App() {
-    // State hooks
     const [darkMode, setDarkMode] = useState(false);
     const [entries, setEntries] = useState([]);
     const [selectedEntry, setSelectedEntry] = useState(null);
@@ -325,30 +308,25 @@ function App() {
     const [lastDetectedEmotion, setLastDetectedEmotion] = useState("");
     const [flashColor, setFlashColor] = useState(null);
     const [showAllEntriesInDrawer, setShowAllEntriesInDrawer] = useState(false);
-    const [isDictating, setIsDictating] = useState(false); // New state for dictation process
+    const [isDictating, setIsDictating] = useState(false);
 
     const theme = useMemo(() => (darkMode ? darkTheme : lightTheme), [darkMode]);
-    const userName = "Michael"; // Example user name
+    const userName = "Michael";
     const isDrawerVisuallyOpen = drawerOpen || hoverOpen;
 
-    // Function to clear status message
     const handleCloseStatus = () => setStatus({ message: "", severity: "info" });
 
-    // useEffect for auto-closing status messages
     useEffect(() => {
         let timer;
-        // Check if there's a message and it's not a simple 'info' one (or if you want all to auto-close, adjust condition)
         if (status.message && status.severity !== "info") {
             timer = setTimeout(() => {
                 handleCloseStatus();
-            }, ALERT_TIMEOUT_DURATION); // Use the constant for 10 seconds
+            }, ALERT_TIMEOUT_DURATION);
         }
-        // Cleanup function to clear the timer if the component unmounts
-        // or if the status changes again before the timer finishes
         return () => {
             clearTimeout(timer);
         };
-    }, [status]); // Re-run this effect if the status object changes
+    }, [status]);
 
 
     const flashBackground = (emotion) => {
@@ -382,7 +360,7 @@ function App() {
 
     const formatDate = (dateString) => {
         if (!dateString) return "Invalid Date";
-        const date = new Date(dateString + 'T00:00:00Z'); // Ensure date is treated as UTC
+        const date = new Date(dateString + 'T00:00:00Z');
         return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
     };
 
@@ -404,67 +382,58 @@ function App() {
         } catch (err) {
             console.error("Error refreshing entries list:", err);
             setStatus({ message: `Error refreshing entries: ${err.message || String(err)}`, severity: "error" });
-            setEntries([]); // Clear entries on error to avoid displaying stale data
+            setEntries([]);
         } finally {
             setLoading(false);
         }
-        return freshEntries; // Return for immediate use if needed
+        return freshEntries;
     };
     
     useEffect(() => {
         refreshEntriesList();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // Initial load
+    }, []);
 
-    // NEW: Handler for starting dictation
     const handleStartDictation = async () => {
         let selectedPath = null;
         try {
-            // Dynamically import tauri's dialog API
             const { open } = await import('@tauri-apps/plugin-dialog');
             const dialogResult = await open({
                 title: "Select Audio File for Dictation",
                 multiple: false,
                 filters: [{
                     name: 'Audio',
-                    // Common audio formats; ensure your whisper.rs setup supports these.
-                    // WAV is generally safest for whisper.cpp.
                     extensions: ['wav', 'mp3', 'm4a', 'flac', 'ogg'] 
                 }]
             });
 
-            if (Array.isArray(dialogResult)) { // Should not happen with multiple: false
+            if (Array.isArray(dialogResult)) {
                 selectedPath = dialogResult[0];
-            } else { // string (path) or null (if cancelled)
+            } else {
                 selectedPath = dialogResult;
             }
 
         } catch (dialogError) {
             console.error("Error opening file dialog:", dialogError);
             setStatus({ message: `Could not open file dialog: ${dialogError.message || String(dialogError)}`, severity: "error" });
-            return; // Exit if dialog fails
+            return;
         }
 
         if (!selectedPath) {
-            // User cancelled the dialog or no file was selected
-            setStatus({ message: "Dictation cancelled: No audio file selected.", severity: "info" }); // This will not auto-close
+            setStatus({ message: "Dictation cancelled: No audio file selected.", severity: "info" });
             return; 
         }
 
-        // Proceed with dictation if a file was selected
         setIsDictating(true);
-        setStatus({ message: "Transcribing audio, please wait...", severity: "info" }); // This will not auto-close
+        setStatus({ message: "Transcribing audio, please wait...", severity: "info" });
 
         try {
-            // Invoke the Rust backend command for dictation
             const transcribedText = await invoke("perform_dictation", { audioFilePath: selectedPath });
-            // Append transcribed text to existing entry text, adding a space if needed
             setEntryText(prevText => prevText.trim() ? `${prevText.trim()} ${transcribedText}` : transcribedText);
             setStatus({ message: "Dictation successful! Text has been added.", severity: "success" });
         } catch (err) {
             console.error("Error during dictation:", err);
             let errorMessage = "Dictation failed. Please try again.";
-            // Attempt to provide more specific error messages from the backend
             if (err && typeof err === 'string') {
                 if (err.includes("Unsupported audio sample rate")) {
                     errorMessage = "Dictation failed: Unsupported audio sample rate. Whisper requires 16kHz.";
@@ -494,7 +463,7 @@ function App() {
         }
         setSaving(true);
         let currentStatusObject = { message: "", severity: "info" };
-        setLastDetectedEmotion(""); // Reset last detected emotion
+        setLastDetectedEmotion("");
 
         let classifiedEmotion = "";
         let contentToSave = entryText;
@@ -507,29 +476,29 @@ function App() {
         } catch (classifyError) {
             console.error("Error classifying emotion:", classifyError);
             currentStatusObject = { message: `Entry to be saved. Emotion classification failed: ${classifyError.message || String(classifyError)}`, severity: "warning" };
-            if (!contentToSave.includes("\n\n🧠 Emotion:")) { // Ensure emotion tag exists even if unknown
+            if (!contentToSave.includes("\n\n🧠 Emotion:")) {
                  contentToSave = `${entryText}\n\n🧠 Emotion: unknown`;
             }
         }
         
         const currentDate = getCurrentDateString();
-        const originalEntriesCount = entries.length; // For checking if a new entry was added
+        const originalEntriesCount = entries.length;
         const existingEntryForToday = entries.find(entry => entry.date === currentDate);
         const operation = existingEntryForToday ? "update_entry" : "create_entry";
         
         let payload;
-        if (existingEntryForToday) { // Update existing entry for today
+        if (existingEntryForToday) {
             payload = { 
                 date: currentDate, 
                 newTitle: existingEntryForToday.title || "Journal Entry", 
                 newContent: contentToSave, 
-                newPassword: existingEntryForToday.password // Preserve existing password if any
+                newPassword: existingEntryForToday.password
             };
-        } else { // Create new entry
+        } else {
             payload = { 
-                title: "Journal Entry", // Default title
+                title: "Journal Entry",
                 content: contentToSave, 
-                password: null, // No password by default for new entries
+                password: null,
             };
         }
 
@@ -537,40 +506,37 @@ function App() {
             await invoke(operation, payload);
             const successVerbText = operation === "create_entry" ? "saved" : "updated";
             
-            if (classifiedEmotion) { // Flash background based on emotion
+            if (classifiedEmotion) {
                 flashBackground(classifiedEmotion);
             }
 
             if (classifiedEmotion && classifiedEmotion.toLowerCase() !== "unknown") {
                 currentStatusObject = { message: `Entry ${successVerbText} successfully! Detected Emotion: ${classifiedEmotion.toUpperCase()}`, severity: "success" };
-            } else if (currentStatusObject.severity !== "warning") { // If no classification error
+            } else if (currentStatusObject.severity !== "warning") {
                 currentStatusObject = { message: `Entry ${successVerbText} successfully!`, severity: "success" };
             }
 
-            setEntryText(""); // Clear input field
-            setShowAllEntriesInDrawer(false); // Collapse entry list if expanded
+            setEntryText("");
+            setShowAllEntriesInDrawer(false);
 
-            const allEntriesAfterOperation = await refreshEntriesList(); // Refresh list and get updated entries
+            const allEntriesAfterOperation = await refreshEntriesList();
             let entryToSelect = null;
 
-            // Try to select the newly created/updated entry
             if (operation === "create_entry") {
                 entryToSelect = allEntriesAfterOperation.find(e => e.date === currentDate);
-                // Fallback if new entry not found by date (should ideally not happen)
                 if (!entryToSelect && allEntriesAfterOperation.length > originalEntriesCount && allEntriesAfterOperation.length > 0) {
                     console.warn(`Newly created entry not found by date '${currentDate}'. Selecting newest entry ('${allEntriesAfterOperation[0].date}') as a fallback.`);
-                    entryToSelect = allEntriesAfterOperation[0]; // Select the newest entry (top of sorted list)
+                    entryToSelect = allEntriesAfterOperation[0];
                 }
-            } else { // For update operation
+            } else {
                 entryToSelect = allEntriesAfterOperation.find(entry => entry.date === currentDate);
             }
             
             if (entryToSelect) {
-                setSelectedEntry(entryToSelect); // Display the saved/updated entry
-                setCurrentView('main'); // Ensure main view is active
-                setIsEditingSelectedEntry(false); // Not in edit mode for the selected entry
+                setSelectedEntry(entryToSelect);
+                setCurrentView('main');
+                setIsEditingSelectedEntry(false);
             } else {
-                // If entry wasn't auto-selected, adjust status message
                 if (currentStatusObject.severity === "success") { 
                      currentStatusObject = { message: `Entry ${successVerbText} successfully, but could not automatically display it. Please select it from the list.`, severity: "info" }; 
                 }
@@ -580,8 +546,8 @@ function App() {
             console.error(`Error ${operation} entry:`, err);
             currentStatusObject = { message: `Failed to ${operation === "create_entry" ? 'save' : 'update'} entry: ${err.message || String(err)}`, severity: "error" };
         } finally {
-            setStatus(currentStatusObject); // Update status message
-            setSaving(false); // Reset saving state
+            setStatus(currentStatusObject);
+            setSaving(false);
         }
     };
 
@@ -590,15 +556,15 @@ function App() {
             const contentWithoutEmotion = getContentForDisplay(selectedEntry.content);
             setEditedContentText(contentWithoutEmotion);
             setIsEditingSelectedEntry(true);
-            setStatus({ message: "", severity: "info" }); // Clear previous status
-            setLastDetectedEmotion(""); // Clear previous emotion
+            setStatus({ message: "", severity: "info" });
+            setLastDetectedEmotion("");
         }
     };
 
     const handleCancelEditSelectedEntry = () => {
         setIsEditingSelectedEntry(false);
-        setEditedContentText(""); // Clear edited text
-        setStatus({ message: "Edit cancelled.", severity: "info" }); // This will not auto-close
+        setEditedContentText("");
+        setStatus({ message: "Edit cancelled.", severity: "info" });
         setLastDetectedEmotion("");
     };
 
@@ -607,7 +573,7 @@ function App() {
             setStatus({ message: "Content cannot be empty.", severity: "warning" });
             return;
         }
-        setSaving(true); // Indicate saving process
+        setSaving(true);
         let currentStatusObject = { message: "", severity: "info" };
         setLastDetectedEmotion("");
 
@@ -630,12 +596,12 @@ function App() {
         try {
             await invoke("update_entry", { 
                 date: selectedEntry.date,
-                newTitle: selectedEntry.title || "Journal Entry", // Use existing title or default
+                newTitle: selectedEntry.title || "Journal Entry",
                 newContent: contentToSave, 
-                newPassword: selectedEntry.password, // Preserve existing password
+                newPassword: selectedEntry.password,
             });
 
-            if (classifiedEmotion) { // Flash background based on emotion
+            if (classifiedEmotion) {
                  flashBackground(classifiedEmotion);
             }
             
@@ -645,19 +611,19 @@ function App() {
                  currentStatusObject = { message: "Entry updated successfully!", severity: "success" };
             }
             
-            const allEntriesAfterUpdate = await refreshEntriesList(); // Refresh list
-            const entryToSelect = allEntriesAfterUpdate.find(entry => entry.date === selectedEntry.date); // Find the updated entry
+            const allEntriesAfterUpdate = await refreshEntriesList();
+            const entryToSelect = allEntriesAfterUpdate.find(entry => entry.date === selectedEntry.date);
             
-            setSelectedEntry(entryToSelect || null); // Update selected entry state
+            setSelectedEntry(entryToSelect || null);
 
-            setIsEditingSelectedEntry(false); // Exit edit mode
-            setEditedContentText(""); // Clear edit text field
+            setIsEditingSelectedEntry(false);
+            setEditedContentText("");
         } catch (err) {
             console.error("Error updating entry:", err);
             currentStatusObject = { message: `Failed to update entry: ${err.message || String(err)}`, severity: "error" };
         } finally {
             setStatus(currentStatusObject);
-            setSaving(false); // Reset saving state
+            setSaving(false);
         }
     };
 
@@ -667,70 +633,66 @@ function App() {
             return;
         }
         
-        setSaving(true); // Indicate operation in progress
-        setStatus({ message: "", severity: "info" }); // Clear status
+        setSaving(true);
+        setStatus({ message: "", severity: "info" });
         setLastDetectedEmotion("");
         try {
-            await invoke("delete_entry", { date: entryToDelete.date }); // Call backend to delete
+            await invoke("delete_entry", { date: entryToDelete.date });
             setStatus({ message: "Entry deleted successfully!", severity: "success" });
             
-            // If the currently edited entry was deleted, exit edit mode
             if (isEditingSelectedEntry && selectedEntry && selectedEntry.date === entryToDelete.date) {
                 setIsEditingSelectedEntry(false);
                 setEditedContentText("");
             }
 
-            const remainingEntries = await refreshEntriesList(); // Refresh entry list
-            setShowAllEntriesInDrawer(false); // Collapse drawer list if expanded
+            const remainingEntries = await refreshEntriesList();
+            setShowAllEntriesInDrawer(false);
 
-            // If the deleted entry was selected, clear selection and go to new entry mode
             if (selectedEntry && selectedEntry.date === entryToDelete.date) {
                 setSelectedEntry(null); 
-                setEntryText(""); // Clear main input field
-                handleNewEntryClick(); // Switch to "new entry" view
-            } else if (remainingEntries.length === 0) { // If no entries left, go to new entry mode
+                setEntryText("");
+                handleNewEntryClick();
+            } else if (remainingEntries.length === 0) {
                  handleNewEntryClick(); 
             }
         } catch (err) {
             console.error("Error deleting entry:", err);
             setStatus({ message: `Failed to delete entry: ${err.message || String(err)}`, severity: "error" });
         } finally {
-            setSaving(false); // Reset saving state
+            setSaving(false);
         }
     };
 
-    // Drawer visibility handlers
     const handleDrawerOpen = () => setDrawerOpen(true);
     const handleDrawerClose = () => setDrawerOpen(false);
-    const handleDrawerHoverOpen = () => !drawerOpen && setHoverOpen(true); // Open on hover only if not pinned open
+    const handleDrawerHoverOpen = () => !drawerOpen && setHoverOpen(true);
     const handleDrawerHoverClose = () => setHoverOpen(false);
     
 
-    // Entry selection and navigation handlers
     const handleEntrySelect = (entry) => {
         setSelectedEntry(entry);
-        setIsEditingSelectedEntry(false); // Ensure not in edit mode when selecting
-        setEditedContentText(""); // Clear any lingering edit text
-        setEntryText(""); // Clear main input field (as we are viewing an old entry)
-        setStatus({ message: "", severity: "info" }); // Clear status
-        setLastDetectedEmotion(""); // Clear emotion
-        setCurrentView('main'); // Ensure main view
-    };
-
-    const handleNewEntryClick = () => {
-        setSelectedEntry(null); // No entry selected
         setIsEditingSelectedEntry(false);
         setEditedContentText("");
-        setEntryText(""); // Clear main input field for new entry
+        setEntryText("");
         setStatus({ message: "", severity: "info" });
         setLastDetectedEmotion("");
         setCurrentView('main');
-        setShowAllEntriesInDrawer(false); // Collapse drawer list
+    };
+
+    const handleNewEntryClick = () => {
+        setSelectedEntry(null);
+        setIsEditingSelectedEntry(false);
+        setEditedContentText("");
+        setEntryText("");
+        setStatus({ message: "", severity: "info" });
+        setLastDetectedEmotion("");
+        setCurrentView('main');
+        setShowAllEntriesInDrawer(false);
     };
 
     const handleSettingsClick = () => {
-        setCurrentView('settings'); // Switch to settings view
-        setSelectedEntry(null); // Deselect any entry
+        setCurrentView('settings');
+        setSelectedEntry(null);
         setIsEditingSelectedEntry(false);
         setStatus({ message: "", severity: "info" });
         setLastDetectedEmotion("");
@@ -744,12 +706,9 @@ function App() {
         setShowAllEntriesInDrawer(prevShowAll => !prevShowAll);
     };
 
-
-    // Drawer content JSX
     const drawerContent = (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             <Box sx={{ flexGrow: 1, overflowY: 'auto' }}>
-                {/* Drawer header with close button (only when pinned open) */}
                 {drawerOpen && (
                     <Toolbar sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', px: [1] }}>
                         <IconButton onClick={handleDrawerClose} color="inherit">
@@ -757,10 +716,8 @@ function App() {
                         </IconButton>
                     </Toolbar>
                 )}
-                {/* Placeholder for toolbar height when drawer is closed (mini) */}
                 {!drawerOpen && <Toolbar sx={{ minHeight: { xs: 56, sm: 64 } }} />}
 
-                {/* New Entry Button */}
                 <Box sx={{ p: 1, mt: 2, mb: 1, overflow: 'hidden' }}>
                     <Button
                         variant="contained"
@@ -779,7 +736,6 @@ function App() {
                     </Button>
                 </Box>
 
-                {/* "Recent" label and divider */}
                 {isDrawerVisuallyOpen && (
                     <Typography variant="subtitle1" sx={{ p: 2, pt: 1, color: 'text.primary', fontWeight: 'bold' }}>
                         Recent
@@ -787,7 +743,6 @@ function App() {
                 )}
                 {isDrawerVisuallyOpen && (loading || entries.length > 0) && <Divider />}
 
-                {/* List of journal entries */}
                 <List sx={{ pt: 0 }}>
                     {loading && isDrawerVisuallyOpen && ( 
                         <ListItem sx={{ justifyContent: 'center' }}><CircularProgress size={24} /></ListItem>
@@ -819,7 +774,6 @@ function App() {
                         </ListItem>
                     ))}
                 </List>
-                {/* Show More/Less button for entries */}
                 {isDrawerVisuallyOpen && !loading && entries.length > INITIAL_VISIBLE_ENTRIES && (
                     <Box sx={{ p: 1, display: 'flex', justifyContent: 'center' }}>
                         <Button 
@@ -835,7 +789,6 @@ function App() {
                 )}
             </Box>
 
-            {/* Bottom section of the drawer (Settings) */}
             <Box sx={{ marginTop: 'auto', flexShrink: 0 }}>
                 <Divider />
                 <List>
@@ -867,17 +820,15 @@ function App() {
         </Box>
     );
 
-    // Main application layout
     return (
         <ThemeProvider theme={theme}>
             <CssBaseline />
             <Box sx={{ 
                 display: 'flex', 
                 height: '100vh', 
-                bgcolor: flashColor || theme.palette.background.default, // Apply flash color or default
-                transition: 'background-color 0.5s ease', // Smooth transition for flash
+                bgcolor: flashColor || theme.palette.background.default,
+                transition: 'background-color 0.5s ease',
             }}>
-                {/* AppBar */}
                 <AppBar position="fixed" isPinnedOpen={drawerOpen}>
                     <Toolbar>
                         <IconButton
@@ -885,70 +836,61 @@ function App() {
                             aria-label="open drawer"
                             onClick={handleDrawerOpen}
                             edge="start"
-                            sx={{ mr: 5, ...(drawerOpen && { display: 'none' }) }} // Hide if drawer is pinned open
+                            sx={{ mr: 5, ...(drawerOpen && { display: 'none' }) }}
                         >
                             <MenuIcon />
                         </IconButton>
                         <Typography variant="h6" noWrap component="div">
                             {currentView === 'settings' ? 'Settings' 
                                 : selectedEntry ? (isEditingSelectedEntry ? `Editing: ${formatDate(selectedEntry.date)}` : formatDate(selectedEntry.date))
-                                        : "MoodJourney"} {/* Default title or new entry title */}
+                                        : "MoodJourney"}
                         </Typography>
                     </Toolbar>
                 </AppBar>
 
-                {/* Drawer */}
                 <Drawer
                     variant="permanent"
-                    open={isDrawerVisuallyOpen} // Controlled by pinned state or hover state
+                    open={isDrawerVisuallyOpen}
                     onMouseEnter={handleDrawerHoverOpen}
                     onMouseLeave={handleDrawerHoverClose}
                 >
                     {drawerContent}
                 </Drawer>
 
-                {/* Main content area */}
                 <Box
                     component="main"
                     sx={{
                         flexGrow: 1, p: 3, display: 'flex', flexDirection: 'column',
-                        // Justify content to bottom for new entry, top for selected/settings
                         justifyContent: (currentView === 'main' && selectedEntry) || currentView === 'settings' ? 'flex-start' : 'flex-end',
-                        height: '100%', overflow: 'hidden' // Prevent main box from causing scroll issues
+                        height: '100%', overflow: 'hidden'
                     }}
                 >
-                    <Toolbar /> {/* Spacer for AppBar */}
+                    <Toolbar />
 
-                    {/* Status Alert Message */}
-                    {/* The condition status.message && status.severity !== "info" ensures only relevant alerts are shown */}
-                    {/* The onClose prop on Alert allows manual dismissal, which will also clear the timeout via the useEffect cleanup */}
                     {status.message && status.severity !== "info" && ( 
                         <Alert
                             severity={status.severity} 
                             sx={{ mb: 2, width: '100%', maxWidth: '800px', mx: 'auto', flexShrink: 0 }}
-                            onClose={handleCloseStatus} // Allow dismissing the alert, which also clears the auto-close timer
+                            onClose={handleCloseStatus}
                         >
                             {status.message}
                         </Alert>
                     )}
 
-                    {/* Conditional rendering based on current view */}
                     {currentView === 'settings' ? (
                         <CombinedSettingsPage darkMode={darkMode} onDarkModeChange={handleDarkModeChange} onBack={handleNewEntryClick} />
                     ) : selectedEntry && currentView === 'main' ? ( 
-                        // Displaying a selected entry (view or edit mode)
                         <>
                             <Box sx={{ mb: 2, alignSelf: 'flex-start', flexShrink: 0 }}> 
                                 <Button
                                     startIcon={<ArrowBackIcon />}
-                                    onClick={handleNewEntryClick} // Go back to new entry mode
+                                    onClick={handleNewEntryClick}
                                     variant="outlined"
                                 >
                                     Back to Journal
                                 </Button>
                             </Box>
                             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, width: '100%', flexGrow: 1, overflow: 'auto' }}>
-                                {/* Main content of the selected entry */}
                                 <Paper
                                     sx={{
                                         p: 3,
@@ -961,7 +903,6 @@ function App() {
                                     }}
                                 >
                                     {isEditingSelectedEntry ? (
-                                        // Edit mode for the selected entry
                                         <>
                                             <TextField
                                                 value={editedContentText} 
@@ -969,13 +910,13 @@ function App() {
                                                 multiline
                                                 minRows={10} 
                                                 fullWidth
-                                                variant="outlined" // Using outlined for better visibility in edit mode
+                                                variant="outlined"
                                                 sx={{ 
                                                     fontSize: '1.125rem', 
                                                     mb: 2, 
                                                     flexGrow: 1, 
                                                     '& .MuiOutlinedInput-root': { borderRadius: '8px' },
-                                                    pt: 0.5, // Padding top
+                                                    pt: 0.5,
                                                 }}
                                                 placeholder="Edit your thoughts here..."
                                             />
@@ -989,7 +930,6 @@ function App() {
                                             </Box>
                                         </>
                                     ) : (
-                                        // View mode for the selected entry
                                         <>
                                             <Typography 
                                                 variant="body1" 
@@ -1017,7 +957,6 @@ function App() {
                                     )}
                                 </Paper>
 
-                                {/* Sidebar for emotion and suggestions (if entry selected) */}
                                 {selectedEntry && ( 
                                     <Paper
                                         sx={{
@@ -1052,7 +991,6 @@ function App() {
                            
                         </>
                     ) : ( 
-                        // New entry input mode (no entry selected)
                         <>
                             <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
                                 <Typography variant="h4" color="text.secondary" sx={{ fontWeight: 'bold' }}>
@@ -1079,25 +1017,22 @@ function App() {
                                             borderRadius: '4px' 
                                         }}
                                     />
-                                    {/* MODIFIED: Conditional rendering for Mic/Send button */}
                                     <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
                                         {entryText.trim() === "" ? (
-                                            // Show Microphone button if entryText is empty
                                             <IconButton
                                                 color="primary"
                                                 onClick={handleStartDictation}
-                                                disabled={isDictating} // Disable while dictating
+                                                disabled={isDictating}
                                                 size="large"
                                                 aria-label="start dictation"
                                             >
                                                 {isDictating ? <CircularProgress size={24} color="inherit" /> : <MicIcon />}
                                             </IconButton>
                                         ) : (
-                                            // Show Send button if entryText has content
                                             <IconButton
                                                 color="primary"
                                                 onClick={handleSaveEntry}
-                                                disabled={saving || !entryText.trim()} // Disable while saving or if text is empty
+                                                disabled={saving || !entryText.trim()}
                                                 size="large"
                                                 aria-label="save entry"
                                             >
