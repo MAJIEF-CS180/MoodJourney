@@ -97,10 +97,18 @@ function App() {
   const aggregateEmotions = (entries, mode = "week") => {
     const grouped = {};
 
-    entries.forEach((entry) => {
-      const emotionMatch = entry.content.match(/🧠 Emotion:\s*(\w+)/);
-      const emotion = emotionMatch ? emotionMatch[1] : null;
+    const normalizeEmotion = (e) => {
+      if (!e) return null;
+      const lower = e.toLowerCase();
+      if (lower.includes("positive")) return "happy";
+      if (lower.includes("negative")) return "sad";
+      if (lower.includes("angry") || lower.includes("anger")) return "angry";
+      return lower;
+    };
 
+    entries.forEach((entry) => {
+      const emotionMatch = entry.content.match(/Emotion:\s*(\w+)/);
+      const emotion = emotionMatch ? normalizeEmotion(emotionMatch[1]) : null;
       if (!emotion) return;
 
       const key =
