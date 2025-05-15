@@ -2598,6 +2598,7 @@ name = "moodjourney"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "chrono",
  "hound",
  "rusqlite",
@@ -2607,8 +2608,10 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
+ "tauri-plugin-fs",
  "tauri-plugin-opener",
  "tokio",
+ "uuid",
  "whisper-rs",
 ]
 

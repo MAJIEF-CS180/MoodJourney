@@ -1,5 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { invoke } from "@tauri-apps/api/core";
+import dayjs from "dayjs"; // Added for graph
+import {
+    BarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    Tooltip,
+    ResponsiveContainer,
+    Legend
+} from "recharts"; // Added for graph
 
 import { styled, useTheme, ThemeProvider, createTheme, alpha } from '@mui/material/styles';
 import {
@@ -24,12 +34,14 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import MicIcon from '@mui/icons-material/Mic';
 
+// Constants for drawer width, entry visibility, and alert timeout
 const drawerWidth = 240;
 const miniDrawerWidth = 65;
 const INITIAL_VISIBLE_ENTRIES = 5;
 const ALERT_TIMEOUT_DURATION = 10000;
 
 
+// Mixin for opened drawer style
 const openedMixin = (theme) => ({
     width: drawerWidth,
     transition: theme.transitions.create('width', {
@@ -39,6 +51,7 @@ const openedMixin = (theme) => ({
     overflowX: 'hidden',
 });
 
+// Mixin for closed drawer style
 const closedMixin = (theme) => ({
     transition: theme.transitions.create('width', {
         easing: theme.transitions.easing.sharp,
@@ -48,6 +61,7 @@ const closedMixin = (theme) => ({
     width: `${miniDrawerWidth}px`,
 });
 
+// Styled AppBar component
 const AppBar = styled(MuiAppBar, {
     shouldForwardProp: (prop) => prop !== 'isPinnedOpen',
 })(({ theme, isPinnedOpen }) => ({
@@ -66,6 +80,7 @@ const AppBar = styled(MuiAppBar, {
     }),
 }));
 
+// Styled Drawer component
 const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' })(
     ({ theme, open }) => ({
         width: drawerWidth,
@@ -90,6 +105,7 @@ const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' 
     }),
 );
 
+// Settings Page Component
 function CombinedSettingsPage({ darkMode, onDarkModeChange, onBack }) {
     const theme = useTheme();
     return (
@@ -155,6 +171,7 @@ function CombinedSettingsPage({ darkMode, onDarkModeChange, onBack }) {
     );
 }
 
+// Base theme options for both light and dark modes
 const baseThemeOptions = {
     typography: {
         fontFamily: '"Inter", Arial, sans-serif',
@@ -218,10 +235,10 @@ const baseThemeOptions = {
                     },
                 }),
                 standardError: ({ theme }) => ({
-                    color: theme.palette.primary.main,
-                    backgroundColor: alpha(theme.palette.primary.main, theme.palette.mode === 'light' ? 0.12 : 0.18),
+                    color: theme.palette.primary.main, // Changed to primary for consistency, consider theme.palette.error.main
+                    backgroundColor: alpha(theme.palette.primary.main, theme.palette.mode === 'light' ? 0.12 : 0.18), // Consider theme.palette.error.main
                     '& .MuiAlert-icon': {
-                        color: theme.palette.primary.main,
+                        color: theme.palette.primary.main, // Consider theme.palette.error.main
                     },
                 }),
                 standardWarning: ({ theme }) => ({
@@ -236,63 +253,65 @@ const baseThemeOptions = {
     }
 };
 
-// Light theme
+// Light theme configuration
 const lightTheme = createTheme({
     ...baseThemeOptions,
     palette: {
         mode: 'light',
-        primary: { main: '#23325A' }, // Midnight Blue
-        secondary: { main: '#653666' }, // Wineberry
+        primary: { main: '#23325A' }, 
+        secondary: { main: '#653666' }, 
         background: {
-            default: '#F3EEEB', // Sweet Cream - Main app background
-            paper: '#FFFCF9',    // Off-white (very light cream) for paper surfaces
+            default: '#F3EEEB', 
+            paper: '#FFFCF9',    
         },
         text: {
-            primary: '#23325A',   // Midnight Blue - Main text color
-            secondary: alpha('#23325A', 0.7), // Lighter Midnight Blue for secondary text
+            primary: '#23325A',   
+            secondary: alpha('#23325A', 0.7), 
         },
         action: {
             hover: alpha('#23325A', 0.06),
             selected: alpha('#23325A', 0.12),
         },
         divider: alpha('#23325A', 0.2),
-        warning: { // Added warning palette for light theme
-            main: '#FFA726', // Amber
+        warning: { 
+            main: '#FFA726', 
             light: '#FFB74D',
             dark: '#F57C00',
         },
     },
 });
 
-// Dark theme
+// Dark theme configuration
 const darkTheme = createTheme({
     ...baseThemeOptions,
     palette: {
         mode: 'dark',
-        primary: { main: '#F3EEEB' }, // Sweet Cream (light for contrast on dark)
-        secondary: { main: '#DECCCA' }, // Misty Blush (also light for contrast)
+        primary: { main: '#F3EEEB' }, 
+        secondary: { main: '#DECCCA' }, 
         background: {
-            default: '#1A2238', // Darker Midnight Blue
-            paper: '#23325A',    // Midnight Blue (for cards, drawer, appbar)
+            default: '#1A2238', 
+            paper: '#23325A',    
         },
         text: {
-            primary: '#F3EEEB',   // Sweet Cream - Main text color for readability
-            secondary: alpha('#F3EEEB', 0.7), // Lighter Sweet Cream for secondary text
+            primary: '#F3EEEB',   
+            secondary: alpha('#F3EEEB', 0.7), 
         },
         action: {
             hover: alpha('#F3EEEB', 0.08),
             selected: alpha('#F3EEEB', 0.16),
         },
         divider: alpha('#F3EEEB', 0.12),
-        warning: { // Added warning palette for dark theme
-            main: '#FFB74D', // Lighter Amber for dark mode
+        warning: { 
+            main: '#FFB74D', 
             light: '#FFCC80',
             dark: '#FFA726',
         },
     },
 });
 
+// Main App component
 function App() {
+    // State hooks
     const [darkMode, setDarkMode] = useState(false);
     const [entries, setEntries] = useState([]);
     const [selectedEntry, setSelectedEntry] = useState(null);
@@ -309,13 +328,17 @@ function App() {
     const [flashColor, setFlashColor] = useState(null);
     const [showAllEntriesInDrawer, setShowAllEntriesInDrawer] = useState(false);
     const [isDictating, setIsDictating] = useState(false);
+    const [reportMode, setReportMode] = useState("week"); // Default report mode
 
+    // Memoized theme based on dark mode state
     const theme = useMemo(() => (darkMode ? darkTheme : lightTheme), [darkMode]);
-    const userName = "Michael";
-    const isDrawerVisuallyOpen = drawerOpen || hoverOpen;
+    const userName = "Michael"; // User's name
+    const isDrawerVisuallyOpen = drawerOpen || hoverOpen; // Determines if drawer is visually open
 
+    // Function to close status alert
     const handleCloseStatus = () => setStatus({ message: "", severity: "info" });
 
+    // Effect to auto-hide status alerts
     useEffect(() => {
         let timer;
         if (status.message && status.severity !== "info") {
@@ -328,15 +351,17 @@ function App() {
         };
     }, [status]);
 
-
+    // Function to flash background color based on emotion
     const flashBackground = (emotion) => {
         const emotionUpper = emotion?.toUpperCase();
         let colorToSet = null;
 
-        if (emotionUpper === "POSITIVE") {
+        if (emotionUpper === "POSITIVE" || emotionUpper === "HAPPY") { 
             colorToSet = darkMode ? '#2E7D32' : '#D4EDDA';
-        } else if (emotionUpper === "NEGATIVE") {
+        } else if (emotionUpper === "NEGATIVE" || emotionUpper === "SAD") { 
             colorToSet = darkMode ? '#C62828' : '#F8D7DA';
+        } else if (emotionUpper === "ANGRY"){ 
+             colorToSet = darkMode ? '#D32F2F' : '#FFCDD2'; 
         }
         
         if (colorToSet) {
@@ -347,31 +372,37 @@ function App() {
         }
     };
 
+    // Function to extract emotion from entry content
     const extractEmotionFromContent = (content) => {
         if (!content) return null;
         const match = content.match(/\n\n🧠 Emotion: (\w+)$/);
         return match ? match[1] : null;
     };
 
+    // Function to get displayable content (without emotion tag)
     const getContentForDisplay = (content) => {
         if (!content) return "";
         return content.replace(/\n\n🧠 Emotion: \w+$/, "");
     };
 
+    // Function to format date string
     const formatDate = (dateString) => {
         if (!dateString) return "Invalid Date";
-        const date = new Date(dateString + 'T00:00:00Z');
+        const date = new Date(dateString + 'T00:00:00Z'); 
         return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
     };
 
+    // Function to get time-based greeting
     const getGreeting = (name) => {
         const hour = new Date().getHours();
         const timeOfDay = hour < 12 ? "Good Morning" : hour < 18 ? "Good Afternoon" : "Good Evening";
         return name ? `${timeOfDay}, ${name}` : timeOfDay;
     };
 
+    // Function to get current date string in YYYY-MM-DD format
     const getCurrentDateString = () => new Date().toISOString().split('T')[0];
 
+    // Function to refresh the list of entries
     const refreshEntriesList = async () => {
         setLoading(true);
         let freshEntries = [];
@@ -382,18 +413,20 @@ function App() {
         } catch (err) {
             console.error("Error refreshing entries list:", err);
             setStatus({ message: `Error refreshing entries: ${err.message || String(err)}`, severity: "error" });
-            setEntries([]);
+            setEntries([]); 
         } finally {
             setLoading(false);
         }
-        return freshEntries;
+        return freshEntries; 
     };
     
+    // Effect to fetch entries on component mount
     useEffect(() => {
         refreshEntriesList();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, []); 
 
+    // Function to handle starting dictation
     const handleStartDictation = async () => {
         let selectedPath = null;
         try {
@@ -410,7 +443,7 @@ function App() {
             if (Array.isArray(dialogResult)) {
                 selectedPath = dialogResult[0];
             } else {
-                selectedPath = dialogResult;
+                selectedPath = dialogResult; 
             }
 
         } catch (dialogError) {
@@ -428,6 +461,7 @@ function App() {
         setStatus({ message: "Transcribing audio, please wait...", severity: "info" });
 
         try {
+            // Invoke backend for dictation
             const transcribedText = await invoke("perform_dictation", { audioFilePath: selectedPath });
             setEntryText(prevText => prevText.trim() ? `${prevText.trim()} ${transcribedText}` : transcribedText);
             setStatus({ message: "Dictation successful! Text has been added.", severity: "success" });
@@ -455,23 +489,24 @@ function App() {
         }
     };
 
-
+    // Function to save a new journal entry or update today's entry
     const handleSaveEntry = async () => {
         if (!entryText.trim()) {
             setStatus({ message: "Entry cannot be empty.", severity: "warning" });
             return;
         }
         setSaving(true);
-        let currentStatusObject = { message: "", severity: "info" };
-        setLastDetectedEmotion("");
+        let currentStatusObject = { message: "", severity: "info" }; 
+        setLastDetectedEmotion(""); 
 
         let classifiedEmotion = "";
         let contentToSave = entryText;
 
         try {
+            // Classify emotion from entry text
             const detectedEmotion = await invoke("classify_emotion", { text: entryText });
             classifiedEmotion = detectedEmotion;
-            setLastDetectedEmotion(detectedEmotion);
+            setLastDetectedEmotion(detectedEmotion); 
             contentToSave = `${entryText}\n\n🧠 Emotion: ${detectedEmotion}`;
         } catch (classifyError) {
             console.error("Error classifying emotion:", classifyError);
@@ -492,13 +527,13 @@ function App() {
                 date: currentDate, 
                 newTitle: existingEntryForToday.title || "Journal Entry", 
                 newContent: contentToSave, 
-                newPassword: existingEntryForToday.password
+                newPassword: existingEntryForToday.password 
             };
         } else {
             payload = { 
-                title: "Journal Entry",
+                title: "Journal Entry", 
                 content: contentToSave, 
-                password: null,
+                password: null, 
             };
         }
 
@@ -512,12 +547,12 @@ function App() {
 
             if (classifiedEmotion && classifiedEmotion.toLowerCase() !== "unknown") {
                 currentStatusObject = { message: `Entry ${successVerbText} successfully! Detected Emotion: ${classifiedEmotion.toUpperCase()}`, severity: "success" };
-            } else if (currentStatusObject.severity !== "warning") {
+            } else if (currentStatusObject.severity !== "warning") { 
                 currentStatusObject = { message: `Entry ${successVerbText} successfully!`, severity: "success" };
             }
 
-            setEntryText("");
-            setShowAllEntriesInDrawer(false);
+            setEntryText(""); 
+            setShowAllEntriesInDrawer(false); 
 
             const allEntriesAfterOperation = await refreshEntriesList();
             let entryToSelect = null;
@@ -528,14 +563,14 @@ function App() {
                     console.warn(`Newly created entry not found by date '${currentDate}'. Selecting newest entry ('${allEntriesAfterOperation[0].date}') as a fallback.`);
                     entryToSelect = allEntriesAfterOperation[0];
                 }
-            } else {
+            } else { 
                 entryToSelect = allEntriesAfterOperation.find(entry => entry.date === currentDate);
             }
             
             if (entryToSelect) {
                 setSelectedEntry(entryToSelect);
-                setCurrentView('main');
-                setIsEditingSelectedEntry(false);
+                setCurrentView('main'); 
+                setIsEditingSelectedEntry(false); 
             } else {
                 if (currentStatusObject.severity === "success") { 
                      currentStatusObject = { message: `Entry ${successVerbText} successfully, but could not automatically display it. Please select it from the list.`, severity: "info" }; 
@@ -547,27 +582,30 @@ function App() {
             currentStatusObject = { message: `Failed to ${operation === "create_entry" ? 'save' : 'update'} entry: ${err.message || String(err)}`, severity: "error" };
         } finally {
             setStatus(currentStatusObject);
-            setSaving(false);
+            setSaving(false); 
         }
     };
 
+    // Function to start editing the currently selected entry
     const handleStartEditSelectedEntry = () => {
         if (selectedEntry) {
             const contentWithoutEmotion = getContentForDisplay(selectedEntry.content);
-            setEditedContentText(contentWithoutEmotion);
+            setEditedContentText(contentWithoutEmotion); 
             setIsEditingSelectedEntry(true);
-            setStatus({ message: "", severity: "info" });
-            setLastDetectedEmotion("");
+            setStatus({ message: "", severity: "info" }); 
+            setLastDetectedEmotion(""); 
         }
     };
 
+    // Function to cancel editing the selected entry
     const handleCancelEditSelectedEntry = () => {
         setIsEditingSelectedEntry(false);
-        setEditedContentText("");
+        setEditedContentText(""); 
         setStatus({ message: "Edit cancelled.", severity: "info" });
         setLastDetectedEmotion("");
     };
 
+    // Function to confirm and save updates to the selected entry
     const handleConfirmUpdateSelectedEntry = async () => {
         if (!selectedEntry || !editedContentText.trim()) {
             setStatus({ message: "Content cannot be empty.", severity: "warning" });
@@ -596,13 +634,13 @@ function App() {
         try {
             await invoke("update_entry", { 
                 date: selectedEntry.date,
-                newTitle: selectedEntry.title || "Journal Entry",
+                newTitle: selectedEntry.title || "Journal Entry", 
                 newContent: contentToSave, 
-                newPassword: selectedEntry.password,
+                newPassword: selectedEntry.password, 
             });
 
             if (classifiedEmotion) {
-                 flashBackground(classifiedEmotion);
+                 flashBackground(classifiedEmotion); 
             }
             
             if (classifiedEmotion && classifiedEmotion.toLowerCase() !== "unknown") {
@@ -614,10 +652,10 @@ function App() {
             const allEntriesAfterUpdate = await refreshEntriesList();
             const entryToSelect = allEntriesAfterUpdate.find(entry => entry.date === selectedEntry.date);
             
-            setSelectedEntry(entryToSelect || null);
+            setSelectedEntry(entryToSelect || null); 
 
-            setIsEditingSelectedEntry(false);
-            setEditedContentText("");
+            setIsEditingSelectedEntry(false); 
+            setEditedContentText(""); 
         } catch (err) {
             console.error("Error updating entry:", err);
             currentStatusObject = { message: `Failed to update entry: ${err.message || String(err)}`, severity: "error" };
@@ -627,14 +665,15 @@ function App() {
         }
     };
 
+    // Function to delete an entry
     const handleDeleteEntry = async (entryToDelete) => {
         if (!entryToDelete || !entryToDelete.date) {
             setStatus({ message: "Cannot delete: Invalid entry data.", severity: "error" });
             return;
         }
         
-        setSaving(true);
-        setStatus({ message: "", severity: "info" });
+        setSaving(true); 
+        setStatus({ message: "", severity: "info" }); 
         setLastDetectedEmotion("");
         try {
             await invoke("delete_entry", { date: entryToDelete.date });
@@ -645,14 +684,14 @@ function App() {
                 setEditedContentText("");
             }
 
-            const remainingEntries = await refreshEntriesList();
-            setShowAllEntriesInDrawer(false);
+            const remainingEntries = await refreshEntriesList(); 
+            setShowAllEntriesInDrawer(false); 
 
             if (selectedEntry && selectedEntry.date === entryToDelete.date) {
                 setSelectedEntry(null); 
-                setEntryText("");
-                handleNewEntryClick();
-            } else if (remainingEntries.length === 0) {
+                setEntryText(""); 
+                handleNewEntryClick(); 
+            } else if (remainingEntries.length === 0) { 
                  handleNewEntryClick(); 
             }
         } catch (err) {
@@ -663,60 +702,107 @@ function App() {
         }
     };
 
+    // Drawer control handlers
     const handleDrawerOpen = () => setDrawerOpen(true);
     const handleDrawerClose = () => setDrawerOpen(false);
-    const handleDrawerHoverOpen = () => !drawerOpen && setHoverOpen(true);
-    const handleDrawerHoverClose = () => setHoverOpen(false);
+    const handleDrawerHoverOpen = () => !drawerOpen && setHoverOpen(true); 
+    const handleDrawerHoverClose = () => setHoverOpen(false); 
     
 
+    // Handler for selecting an entry from the drawer
     const handleEntrySelect = (entry) => {
         setSelectedEntry(entry);
-        setIsEditingSelectedEntry(false);
-        setEditedContentText("");
-        setEntryText("");
-        setStatus({ message: "", severity: "info" });
+        setIsEditingSelectedEntry(false); 
+        setEditedContentText(""); 
+        setEntryText(""); 
+        setStatus({ message: "", severity: "info" }); 
         setLastDetectedEmotion("");
-        setCurrentView('main');
+        setCurrentView('main'); 
     };
 
+    // Handler for "New Entry" button click
     const handleNewEntryClick = () => {
-        setSelectedEntry(null);
+        setSelectedEntry(null); 
         setIsEditingSelectedEntry(false);
         setEditedContentText("");
-        setEntryText("");
+        setEntryText(""); 
         setStatus({ message: "", severity: "info" });
         setLastDetectedEmotion("");
         setCurrentView('main');
-        setShowAllEntriesInDrawer(false);
+        setShowAllEntriesInDrawer(false); 
     };
 
+    // Handler for "Settings" button click
     const handleSettingsClick = () => {
         setCurrentView('settings');
-        setSelectedEntry(null);
+        setSelectedEntry(null); 
         setIsEditingSelectedEntry(false);
         setStatus({ message: "", severity: "info" });
         setLastDetectedEmotion("");
     };
 
+    // Handler for dark mode toggle
     const handleDarkModeChange = (event) => {
         setDarkMode(event.target.checked);
     };
 
+    // Handler to toggle showing all entries in the drawer
     const handleToggleShowEntries = () => {
         setShowAllEntriesInDrawer(prevShowAll => !prevShowAll);
     };
 
+    // Function to aggregate emotions for the graph
+    const aggregateEmotions = (entriesToAggregate, mode = "week") => {
+        const grouped = {};
+
+        const normalizeEmotion = (e) => {
+            if (!e) return null;
+            const lower = e.toLowerCase();
+            if (lower.includes("positive") || lower.includes("joy") || lower.includes("love")) return "happy";
+            if (lower.includes("negative") || lower.includes("sadness") || lower.includes("fear")) return "sad";
+            if (lower.includes("anger")) return "angry";
+            if (lower.includes("neutral")) return "neutral"; 
+            return lower; 
+        };
+
+        entriesToAggregate.forEach((entry) => {
+            const emotionMatch = entry.content ? entry.content.match(/\n\n🧠 Emotion: (\w+)$/) : null;
+            const emotion = emotionMatch ? normalizeEmotion(emotionMatch[1]) : null;
+            if (!emotion) return; 
+
+            let key;
+            // Determine the key for aggregation based on the mode
+            if (mode === "day") {
+                key = dayjs(entry.date).format("YYYY-MM-DD"); // Use the date itself as the key for daily
+            } else if (mode === "week") {
+                key = dayjs(entry.date).startOf("week").format("YYYY-MM-DD"); 
+            } else { // month
+                key = dayjs(entry.date).startOf("month").format("YYYY-MM"); 
+            }
+
+            if (!grouped[key]) grouped[key] = {}; 
+            grouped[key][emotion] = (grouped[key][emotion] || 0) + 1; 
+        });
+
+        return Object.entries(grouped).map(([period, emotions]) => ({
+            period, 
+            ...emotions, 
+        })).sort((a,b) => dayjs(a.period).valueOf() - dayjs(b.period).valueOf()); 
+    };
+
+
+    // JSX for drawer content
     const drawerContent = (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             <Box sx={{ flexGrow: 1, overflowY: 'auto' }}>
-                {drawerOpen && (
+                {drawerOpen && ( 
                     <Toolbar sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', px: [1] }}>
                         <IconButton onClick={handleDrawerClose} color="inherit">
                             {theme.direction === 'rtl' ? <ChevronRightIcon /> : <ChevronLeftIcon />}
                         </IconButton>
                     </Toolbar>
                 )}
-                {!drawerOpen && <Toolbar sx={{ minHeight: { xs: 56, sm: 64 } }} />}
+                {!drawerOpen && <Toolbar sx={{ minHeight: { xs: 56, sm: 64 } }} />} 
 
                 <Box sx={{ p: 1, mt: 2, mb: 1, overflow: 'hidden' }}>
                     <Button
@@ -820,14 +906,15 @@ function App() {
         </Box>
     );
 
+    // Main component render
     return (
         <ThemeProvider theme={theme}>
-            <CssBaseline />
+            <CssBaseline /> 
             <Box sx={{ 
                 display: 'flex', 
                 height: '100vh', 
-                bgcolor: flashColor || theme.palette.background.default,
-                transition: 'background-color 0.5s ease',
+                bgcolor: flashColor || theme.palette.background.default, 
+                transition: 'background-color 0.5s ease', 
             }}>
                 <AppBar position="fixed" isPinnedOpen={drawerOpen}>
                     <Toolbar>
@@ -836,7 +923,7 @@ function App() {
                             aria-label="open drawer"
                             onClick={handleDrawerOpen}
                             edge="start"
-                            sx={{ mr: 5, ...(drawerOpen && { display: 'none' }) }}
+                            sx={{ mr: 5, ...(drawerOpen && { display: 'none' }) }} 
                         >
                             <MenuIcon />
                         </IconButton>
@@ -862,16 +949,16 @@ function App() {
                     sx={{
                         flexGrow: 1, p: 3, display: 'flex', flexDirection: 'column',
                         justifyContent: (currentView === 'main' && selectedEntry) || currentView === 'settings' ? 'flex-start' : 'flex-end',
-                        height: '100%', overflow: 'hidden'
+                        height: '100%', overflow: 'hidden' 
                     }}
                 >
-                    <Toolbar />
+                    <Toolbar /> 
 
                     {status.message && status.severity !== "info" && ( 
                         <Alert
                             severity={status.severity} 
                             sx={{ mb: 2, width: '100%', maxWidth: '800px', mx: 'auto', flexShrink: 0 }}
-                            onClose={handleCloseStatus}
+                            onClose={handleCloseStatus} 
                         >
                             {status.message}
                         </Alert>
@@ -884,7 +971,7 @@ function App() {
                             <Box sx={{ mb: 2, alignSelf: 'flex-start', flexShrink: 0 }}> 
                                 <Button
                                     startIcon={<ArrowBackIcon />}
-                                    onClick={handleNewEntryClick}
+                                    onClick={handleNewEntryClick} 
                                     variant="outlined"
                                 >
                                     Back to Journal
@@ -910,7 +997,7 @@ function App() {
                                                 multiline
                                                 minRows={10} 
                                                 fullWidth
-                                                variant="outlined"
+                                                variant="outlined" 
                                                 sx={{ 
                                                     fontSize: '1.125rem', 
                                                     mb: 2, 
@@ -992,18 +1079,64 @@ function App() {
                         </>
                     ) : ( 
                         <>
-                            <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-                                <Typography variant="h4" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+                            <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', overflowY: 'auto' }}>
+                                <Typography variant="h4" color="text.secondary" sx={{ fontWeight: 'bold', mb: 3 }}>
                                     {getGreeting(userName)}
                                 </Typography>
+
+                                <Paper sx={{ p:2, borderRadius: '16px', width: '100%', maxWidth: '800px', mb: 3}}>
+                                    <Typography variant="h6" gutterBottom sx={{ textAlign: 'center' }}>
+                                        Mood Report
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+                                        {/* Button for Daily View */}
+                                        <Button 
+                                            onClick={() => setReportMode("day")} 
+                                            disabled={reportMode === "day"}
+                                            variant={reportMode === 'day' ? 'contained' : 'outlined'}
+                                            sx={{ mr: 1 }}
+                                        >
+                                            Daily
+                                        </Button>
+                                        <Button 
+                                            onClick={() => setReportMode("week")} 
+                                            disabled={reportMode === "week"}
+                                            variant={reportMode === 'week' ? 'contained' : 'outlined'}
+                                            sx={{ mr: 1 }}
+                                        >
+                                            Weekly
+                                        </Button>
+                                        <Button 
+                                            onClick={() => setReportMode("month")} 
+                                            disabled={reportMode === "month"}
+                                            variant={reportMode === 'month' ? 'contained' : 'outlined'}
+                                        >
+                                            Monthly
+                                        </Button>
+                                    </Box>
+                                    <Box sx={{ width: "100%", height: 300 }}> 
+                                        <ResponsiveContainer>
+                                            <BarChart data={aggregateEmotions(entries, reportMode)}>
+                                                <XAxis dataKey="period" />
+                                                <YAxis allowDecimals={false} />
+                                                <Tooltip />
+                                                <Legend />
+                                                <Bar dataKey="happy" fill={theme.palette.mode === 'dark' ? '#66bb6a' : '#81c784'} /> 
+                                                <Bar dataKey="sad" fill={theme.palette.mode === 'dark' ? '#ef5350' : '#e57373'} />
+                                                <Bar dataKey="angry" fill={theme.palette.mode === 'dark' ? '#f44336' : '#ef5350'} />
+                                                <Bar dataKey="neutral" fill={theme.palette.mode === 'dark' ? '#bdbdbd' : '#9e9e9e'} />
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </Box>
+                                </Paper>
                             </Box>
-                            <Box sx={{ width: '100%', maxWidth: '800px', mx: 'auto', mb: 2, flexShrink: 0 }}>
+                            <Box sx={{ width: '100%', maxWidth: '800px', mx: 'auto', mb: 2, flexShrink: 0, mt: 'auto'  }}>
                                 <Paper sx={{ p: 2, borderRadius: '16px', display: 'flex', flexDirection: 'column' }}>
                                     <TextField
                                         id="journal-entry-input"
                                         placeholder="Write your thoughts here..."
                                         multiline
-                                        minRows={4}
+                                        minRows={4} 
                                         value={entryText}
                                         onChange={(e) => setEntryText(e.target.value)}
                                         variant="standard" 
@@ -1022,7 +1155,7 @@ function App() {
                                             <IconButton
                                                 color="primary"
                                                 onClick={handleStartDictation}
-                                                disabled={isDictating}
+                                                disabled={isDictating} 
                                                 size="large"
                                                 aria-label="start dictation"
                                             >
@@ -1032,7 +1165,7 @@ function App() {
                                             <IconButton
                                                 color="primary"
                                                 onClick={handleSaveEntry}
-                                                disabled={saving || !entryText.trim()}
+                                                disabled={saving || !entryText.trim()} 
                                                 size="large"
                                                 aria-label="save entry"
                                             >

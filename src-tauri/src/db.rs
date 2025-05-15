@@ -11,7 +11,8 @@ pub struct Entry {
     pub date: String,
     pub title: String,
     pub content: Option<String>,
-    pub password: Option<String>, 
+    pub password: Option<String>,
+    pub image: Option<String>,
 }
 
 pub fn init_db() -> Result<()> {
@@ -21,7 +22,8 @@ pub fn init_db() -> Result<()> {
             date TEXT NOT NULL,
             title TEXT NOT NULL,
             content TEXT,
-            password TEXT
+            password TEXT,
+            image TEXT
         )",
         [],
     )?;
@@ -52,21 +54,22 @@ pub fn add_entry(entry: Entry) -> Result<()> {
 
     let conn = Connection::open("entries.db")?;
     conn.execute(
-        "INSERT INTO entries (date, title, content, password) VALUES (?1, ?2, ?3, ?4)",
-        params![entry.date, entry.title, entry.content, entry.password],
+        "INSERT INTO entries (date, title, content, password, image) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![entry.date, entry.title, entry.content, entry.password, entry.image],
     )?;
     Ok(())
 }
 
 pub fn get_entries() -> Result<Vec<Entry>> {
     let conn = Connection::open("entries.db")?;
-    let mut stmt = conn.prepare("SELECT date, title, content, password FROM entries")?;
+    let mut stmt = conn.prepare("SELECT date, title, content, password, image FROM entries")?;
     let entry_iter = stmt.query_map([], |row| {
         Ok(Entry {
             date: row.get(0)?,
             title: row.get(1)?,
             content: row.get(2)?,
             password: row.get(3)?,
+            image: row.get(4)?,
         })
     })?;
 
@@ -80,7 +83,7 @@ pub fn get_entries() -> Result<Vec<Entry>> {
 
 pub fn get_entry_by_date(date: &str) -> Result<Option<Entry>> {
     let conn = Connection::open("entries.db")?;
-    let mut stmt = conn.prepare("SELECT date, title, content, password FROM entries WHERE date = ?1")?;
+    let mut stmt = conn.prepare("SELECT date, title, content, password, image FROM entries WHERE date = ?1")?;
 
     let entry = stmt.query_row([date], |row| {
         Ok(Entry {
@@ -88,17 +91,18 @@ pub fn get_entry_by_date(date: &str) -> Result<Option<Entry>> {
             title: row.get(1)?,
             content: row.get(2)?,
             password: row.get(3)?,
+            image: row.get(4)?,
         })
     }).optional()?;
 
     Ok(entry)
 }
 
-pub fn update_entry_by_date(date: &str, new_title: &str, new_content: Option<&str>, new_password: Option<&str>) -> Result<()> {
+pub fn update_entry_by_date(date: &str, new_title: &str, new_content: Option<&str>, new_password: Option<&str>, new_image: Option<&str>) -> Result<()> {
     let conn = Connection::open("entries.db")?;
     conn.execute(
-        "UPDATE entries SET title = ?1, content = ?2, password = ?3 WHERE date = ?4",
-        params![new_title, new_content, new_password, date],
+        "UPDATE entries SET title = ?1, content = ?2, password = ?3, image = ?4 WHERE date = ?5",
+        params![new_title, new_content, new_password, new_image, date],
     )?;
     Ok(())
 }
@@ -109,13 +113,14 @@ pub fn delete_entry_by_date(date: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn create_entry_with_now(title: &str, content: Option<&str>, password: Option<&str>) -> Result<()> {
+pub fn create_entry_with_now(title: &str, content: Option<&str>, password: Option<&str>, image: Option<&str>) -> Result<()> {
     let date = Local::now().format("%Y-%m-%d").to_string();
     let entry = Entry {
         date,
         title: title.to_string(),
         content: content.map(|s| s.to_string()),
         password: password.map(|s| s.to_string()),
+        image: image.map(|s| s.to_string()),
     };
     add_entry(entry)
 }
@@ -137,6 +142,7 @@ mod tests {
             title: "Test Title".to_string(),
             content: Some("Test Content".to_string()),
             password: Some("1234".to_string()),
+            image: Some("images/test_image.jpg".to_string()),
         };
 
         add_entry(new_entry).expect("Failed to add entry");
@@ -155,14 +161,16 @@ mod tests {
             title: "Initial Title".to_string(),
             content: Some("Initial Content".to_string()),
             password: Some("initpass".to_string()),
+            image: None,
         };
 
         add_entry(entry).expect("add failed");
 
         let fetched = get_entry_by_date("2025-04-21").expect("get failed").expect("no entry");
         assert_eq!(fetched.title, "Initial Title");
+        assert!(fetched.image.is_none());
 
-        update_entry_by_date("2025-04-21", "Updated", Some("Updated Content"), Some("newpass"))
+        update_entry_by_date("2025-04-21", "Updated", Some("Updated Content"), Some("newpass"), None)
             .expect("update failed");
 
         let updated = get_entry_by_date("2025-04-21").expect("get failed").expect("no entry");
