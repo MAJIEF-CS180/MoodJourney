@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
   Legend
 } from "recharts";
+import PasswordPopup from "./PasswordPopup";
 
 function App() {
 
@@ -18,6 +19,7 @@ function App() {
   const [status, setStatus] = useState(""); //holds message for entry saved or failure to save
   const [reportMode, setReportMode] = useState("week"); // week/month toggle
   const [lastEmotion, setLastEmotion] = useState(""); // for instant feedback from backend testing
+  const [isModalOpen, setIsModalOpen] = useState(true); // for password popup
 
   const fetchEntries = async () => {
     try {
@@ -143,7 +145,8 @@ function App() {
 
 
 return (
-  <div className="container" style={{ padding: "2em", fontFamily: "sans-serif" }}>
+  <div className="container" style={{ padding: "2em", fontFamily: "sans-serif" }}>    
+    <PasswordPopup />
     <h1>Mood Journal</h1>
 
     <textarea
