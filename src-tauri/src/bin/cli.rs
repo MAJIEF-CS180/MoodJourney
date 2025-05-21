@@ -23,11 +23,13 @@ fn main() {
             let title = args.get(3).expect("Need title");
             let content = args.get(4);
             let password = args.get(5);
+            let image = args.get(6); 
             let entry = Entry {
                 date: date.to_string(),
                 title: title.to_string(),
                 content: content.map(|s| s.to_string()),
                 password: password.map(|s| s.to_string()),
+                image: image.map(|s| s.to_string()),
             };
 
             let added_entry = add_entry(entry).expect("Failed to add entry");
@@ -37,8 +39,9 @@ fn main() {
             let title = args.get(2).expect("Need title");
             let content = args.get(3).map(|s| s.as_str());
             let password = args.get(4).map(|s| s.as_str());
+            let image = args.get(5).map(|s| s.as_str());
 
-            create_entry_with_now(title, content, password).expect("Failed to create");
+            create_entry_with_now(title, content, password, image).expect("Failed to create");
             println!("Entry added.");
         }
         "get" => {
@@ -53,8 +56,9 @@ fn main() {
             let title = args.get(3).expect("Need title");
             let content = args.get(4).map(|s| s.as_str());
             let password = args.get(5).map(|s| s.as_str());
+            let new_image = args.get(6).map(|s| s.as_str());
 
-            update_entry_by_date(date, title, content, password).expect("Failed to update");
+            update_entry_by_date(date, title, content, password, new_image).expect("Failed to update");
             println!("Entry updated.");
         }
         "delete" => {
