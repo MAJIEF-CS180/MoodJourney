@@ -1,23 +1,25 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { invoke } from "@tauri-apps/api/core";
-import dayjs from "dayjs"; // Added for graph
-import {
-    BarChart,
-    Bar,
-    XAxis,
-    YAxis,
-    Tooltip,
-    ResponsiveContainer,
-    Legend
-} from "recharts"; // Added for graph
+// import dayjs from "dayjs"; // No longer needed for InsightsPage, but kept if other parts use it
+// Recharts components are no longer used in InsightsPage, can be removed if not used elsewhere
+// import {
+//     BarChart,
+//     Bar,
+//     XAxis,
+//     YAxis,
+//     Tooltip,
+//     ResponsiveContainer,
+//     Legend
+// } from "recharts";
 
 import { styled, useTheme, ThemeProvider, createTheme, alpha } from '@mui/material/styles';
 import {
     AppBar as MuiAppBar, Box, Button, Drawer as MuiDrawer, List, ListItem,
     ListItemButton, ListItemIcon, ListItemText, Toolbar, Typography,
     CircularProgress, Alert, CssBaseline, Divider, Paper, IconButton,
-    TextField, Switch, // Switch might be removed or repurposed from SettingsPage
-    Select, MenuItem, FormControl, InputLabel // Added for theme selection
+    TextField, Switch,
+    Select, MenuItem, FormControl, InputLabel, Card, CardActionArea, CardContent, Grid,
+    Tooltip as MuiTooltip
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import AddIcon from '@mui/icons-material/Add';
@@ -35,12 +37,15 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import MicIcon from '@mui/icons-material/Mic';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'; // Sparkles Icon for Insights
+import VisibilityIcon from '@mui/icons-material/Visibility'; // For "Visual" button
+import InfoIcon from '@mui/icons-material/Info'; // For "Informative" button
 
 // Constants for drawer width, entry visibility, and alert timeout
 const drawerWidth = 240;
 const miniDrawerWidth = 65;
 const INITIAL_VISIBLE_ENTRIES = 5;
 const ALERT_TIMEOUT_DURATION = 10000;
+const TOTAL_GRID_SQUARES_TARGET = 150;
 
 
 // Mixin for opened drawer style
@@ -132,7 +137,6 @@ const extractEmotionFromContent = (fullContent) => {
 };
 
 // Helper function to extract the suggestion text from the full content
-// Assumes the suggestion tag is the last special tag and its content goes to the end of the string.
 const extractSuggestionFromContent = (fullContent) => {
     if (!fullContent) return null;
     const match = fullContent.match(/\n\n💡 Suggestion: ([\s\S]+)$/);
@@ -144,10 +148,56 @@ const getContentForEditing = (fullContent) => {
     return getMainContent(fullContent);
 };
 
+// Helper function to format date string (used in App and potentially InsightsPage)
+const formatDate = (dateString) => {
+    if (!dateString) return "Invalid Date";
+    // Ensuring the date is parsed as local if no timezone info, then displayed
+    const date = new Date(dateString.includes('T') ? dateString : dateString + 'T00:00:00');
+    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+};
 
-// Settings Page Component
+// Helper function to get emotion color (used in InsightsPage)
+const getEmotionColor = (emotion, theme) => {
+    const emotionLower = emotion?.toLowerCase();
+    const isDark = theme.palette.mode === 'dark';
+    switch (emotionLower) {
+        case 'sadness': return isDark ? '#64B5F6' : '#1976D2'; // Blue
+        case 'anger':
+        case 'angry': return isDark ? '#E57373' : '#D32F2F'; // Red
+        case 'neutral': return isDark ? '#B0BEC5' : '#607D8B'; // Grey
+        case 'joy': return isDark ? '#FFF176' : '#FBC02D'; // Yellow
+        case 'disgust': return isDark ? '#81C784' : '#388E3C'; // Green
+        case 'fear': return isDark ? '#CE93D8' : '#7B1FA2'; // Purple
+        case 'surprise': return isDark ? '#FFB74D' : '#F57C00'; // Orange
+        default: return theme.palette.text.disabled;
+    }
+};
+
+// Common scrollbar styling
+const scrollbarStyles = (theme) => ({
+    height: '100%',
+    overflowY: 'auto',
+    pr: 0.5,
+    mr: -0.5,
+    '&::-webkit-scrollbar': {
+        width: '8px',
+    },
+    '&::-webkit-scrollbar-track': {
+        background: 'transparent',
+    },
+    '&::-webkit-scrollbar-thumb': {
+        background: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.25) : alpha(theme.palette.common.black, 0.25),
+        borderRadius: '4px',
+        '&:hover': {
+            background: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.4) : alpha(theme.palette.common.black, 0.4),
+        }
+    },
+});
+
+
+// Settings Page Component - MODIFIED
 function CombinedSettingsPage({ currentThemeMode, onThemeModeChange, onBack }) {
-    const theme = useTheme(); // MUI theme for styling consistency
+    const theme = useTheme();
     return (
         <>
             <Box sx={{ mb: 2, alignSelf: 'flex-start', flexShrink: 0 }}>
@@ -159,151 +209,338 @@ function CombinedSettingsPage({ currentThemeMode, onThemeModeChange, onBack }) {
                     Back to Journal
                 </Button>
             </Box>
-            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, width: '100%', flexGrow: 1, overflow: 'auto' }}>
-                <Paper
-                    sx={{
-                        p: 3,
-                        flex: { xs: '1 1 auto', md: '2 1 0%' },
-                        minWidth: 0,
-                        overflowY: 'auto',
-                        borderRadius: '16px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                    }}
-                >
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', mb: 2, pt: 1 }}>
-                        <Typography variant="body1" id="theme-select-label" sx={{ fontSize: '1.125rem' }}>
-                            Theme
-                        </Typography>
-                        <FormControl sx={{ minWidth: 120 }} size="small">
-                            {/* The InputLabel is not strictly necessary if the Select has a label prop and is not variant="standard"
-                                but can be kept for consistency or if a floating label is desired.
-                                For a simpler look without a floating label, you can remove InputLabel and the labelId from Select,
-                                and rely on the Typography "Theme" as the visual label.
-                            */}
-                            {/* <InputLabel id="theme-select-label-helper">Theme</InputLabel> */}
-                            <Select
-                                labelId="theme-select-label-helper" // Can be removed if InputLabel is removed
-                                id="theme-select"
-                                value={currentThemeMode}
-                                // label="Theme" // Use this if you want an outlined label on the Select itself
-                                onChange={(e) => onThemeModeChange(e.target.value)}
-                                sx={{ borderRadius: '8px' }} // Consistent border radius
-                            >
-                                <MenuItem value="light">Light</MenuItem>
-                                <MenuItem value="dark">Dark</MenuItem>
-                                <MenuItem value="system">System</MenuItem>
-                            </Select>
-                        </FormControl>
-                    </Box>
-                    <Typography variant="body1" color="text.secondary" sx={{mt: 'auto', pt: 2, fontSize: '1.125rem' }}>
-                        More settings will be available here in the future.
-                    </Typography>
-                </Paper>
-
-                <Paper
-                    sx={{
-                        p: 2.5,
-                        flex: { xs: '1 1 auto', md: '1 1 0%' },
-                        minWidth: 0,
-                        borderRadius: '16px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        overflowY: 'auto',
-                        borderLeft: { md: `1px solid ${theme.palette.divider}` },
-                    }}
-                >
-                    <Box sx={{ flexGrow: 1, pt: 1 }}>
-                        <Typography variant="body1" sx={{ fontSize: '1.125rem', color: 'text.primary', pt: 1 }}>
-                            MoodJourney v0.10
+            <Paper
+                sx={{
+                    p: 1,
+                    width: '100%',
+                    flexGrow: 1,
+                    borderRadius: '16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                }}
+            >
+                <Box sx={scrollbarStyles(theme)}>
+                    <Box sx={{ p: theme.spacing(1.5), pr: theme.spacing(1), display: 'flex', flexDirection: 'column', height: '100%' }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', width: '100%', mb: 2, flexShrink: 0 }}>
+                            <Typography variant="body1" id="theme-select-label" sx={{ fontSize: '1.125rem', mr: 2, pb: '0px' }}>
+                                Theme
+                            </Typography>
+                            {/* MODIFICATION: Added small marginTop to the FormControl */}
+                            <FormControl sx={{ minWidth: 240, mt: '0px' /* Adjust as needed */ }} size="small">
+                                <Select
+                                    labelId="theme-select-label-helper"
+                                    id="theme-select"
+                                    value={currentThemeMode}
+                                    onChange={(e) => onThemeModeChange(e.target.value)}
+                                    sx={{ borderRadius: '8px' }}
+                                >
+                                    <MenuItem value="light">Light</MenuItem>
+                                    <MenuItem value="dark">Dark</MenuItem>
+                                    <MenuItem value="system">System</MenuItem>
+                                </Select>
+                            </FormControl>
+                        </Box>
+                        <Typography variant="body1" color="text.secondary" sx={{ mt: 'auto', fontSize: '1.125rem', flexShrink: 0, textAlign:'left' }}>
+                            MoodJourney v0.1.0
                         </Typography>
                     </Box>
-                </Paper>
-            </Box>
+                </Box>
+            </Paper>
         </>
     );
 }
 
 // Insights Page Component
-function InsightsPage({ entries, theme, reportMode, setReportMode, aggregateEmotions, onBack }) {
-    const renderLegendText = (value, entry) => {
-        const capitalizedValue = value.charAt(0).toUpperCase() + value.slice(1);
-        return <span style={{ color: theme.palette.text.primary }}>{capitalizedValue}</span>;
+function InsightsPage({ entries, theme, onBack, handleEntrySelect }) {
+    const [insightsViewMode, setInsightsViewMode] = useState("Informative");
+
+    const emotionCounts = useMemo(() => {
+        const counts = {
+            sadness: 0, angry: 0, neutral: 0, joy: 0,
+            disgust: 0, fear: 0, surprise: 0, unknown: 0
+        };
+        entries.forEach(entry => {
+            const extractedEmotion = extractEmotionFromContent(entry.content)?.toLowerCase();
+            let targetKey = extractedEmotion;
+
+            if (extractedEmotion === "anger") {
+                targetKey = "angry";
+            }
+
+            if (targetKey && counts.hasOwnProperty(targetKey)) {
+                counts[targetKey]++;
+            } else if (extractedEmotion) {
+                counts.unknown++;
+            } else {
+                counts.unknown++;
+            }
+        });
+        return counts;
+    }, [entries]);
+
+    const getEntryPreview = (content) => {
+        const main = getMainContent(content);
+        const lines = main.split('\n');
+        return lines.slice(0, 5).join('\n') + (lines.length > 5 ? '...' : '');
     };
+
+    const handleCardClick = (entry) => {
+        if (handleEntrySelect) {
+            handleEntrySelect(entry);
+        }
+    };
+
+    // JSX for the emotion summary list, to be reused
+    const EmotionSummaryList = () => {
+        const orderedEmotionKeys = ['angry', 'disgust', 'fear', 'joy', 'neutral', 'sadness', 'surprise'];
+        let hasDisplayedEmotions = false;
+
+        return (
+            <Box sx={{ p: theme.spacing(1.5), pr: theme.spacing(1) }}>
+                {orderedEmotionKeys.map((emotionKey) => {
+                    const count = emotionCounts[emotionKey];
+                    if (count > 0) {
+                        hasDisplayedEmotions = true;
+                        let displayName = emotionKey.charAt(0).toUpperCase() + emotionKey.slice(1);
+                        if (emotionKey === 'angry') {
+                            displayName = 'Anger';
+                        }
+                        return (
+                            <Box key={emotionKey} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, p:1, borderRadius: '8px', background: alpha(getEmotionColor(emotionKey, theme), 0.1) }}>
+                                <Typography variant="body1" sx={{ textTransform: 'capitalize', color: getEmotionColor(emotionKey, theme) }}>
+                                    {displayName}
+                                </Typography>
+                                <Typography variant="body1" sx={{ fontWeight: 'bold', color: getEmotionColor(emotionKey, theme) }}>
+                                    {count}
+                                </Typography>
+                            </Box>
+                        );
+                    }
+                    return null;
+                })}
+                {emotionCounts.unknown > 0 && (() => {
+                    hasDisplayedEmotions = true;
+                    return (
+                        <Box key="unknown" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, p:1, borderRadius: '8px', background: alpha(getEmotionColor("unknown", theme), 0.1) }}>
+                            <Typography variant="body1" sx={{ textTransform: 'capitalize', color: getEmotionColor("unknown", theme) }}>
+                                Unknown
+                            </Typography>
+                            <Typography variant="body1" sx={{ fontWeight: 'bold', color: getEmotionColor("unknown", theme) }}>
+                                {emotionCounts.unknown}
+                            </Typography>
+                        </Box>
+                    );
+                })()}
+
+                {entries.length > 0 && !hasDisplayedEmotions && (
+                     <Typography sx={{ textAlign: 'center', mt: 1 }} color="text.secondary">No categorized emotions found.</Typography>
+                )}
+                {entries.length === 0 && (
+                     <Typography sx={{ textAlign: 'center', mt: 1 }} color="text.secondary">No data for summary.</Typography>
+                )}
+            </Box>
+        );
+    };
+
 
     return (
         <>
-            <Box sx={{ mb: 2, alignSelf: 'flex-start', flexShrink: 0 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexShrink: 0 }}>
                 <Button
                     startIcon={<ArrowBackIcon />}
-                    onClick={onBack} 
+                    onClick={onBack}
                     variant="outlined"
                 >
                     Back to Journal
                 </Button>
+                <Box>
+                    <Button
+                        onClick={() => setInsightsViewMode("Informative")}
+                        variant={insightsViewMode === 'Informative' ? 'contained' : 'outlined'}
+                        startIcon={<InfoIcon />}
+                        sx={{ mr: 1 }}
+                    >
+                        Informative
+                    </Button>
+                    <Button
+                        onClick={() => setInsightsViewMode("Visual")}
+                        variant={insightsViewMode === 'Visual' ? 'contained' : 'outlined'}
+                        startIcon={<VisibilityIcon />}
+                    >
+                        Visual
+                    </Button>
+                </Box>
             </Box>
-            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, width: '100%', flexGrow: 1, overflow: 'auto' }}>
+
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, width: '100%', flexGrow: 1, overflow: 'hidden' }}>
                 <Paper
                     sx={{
-                        p: 3,
+                        p: 1,
                         flex: { xs: '1 1 auto', md: '2 1 0%' },
                         minWidth: 0,
-                        overflowY: 'auto',
                         borderRadius: '16px',
                         display: 'flex',
                         flexDirection: 'column',
+                        overflow: 'hidden',
                     }}
                 >
-                    <Typography variant="h6" gutterBottom sx={{ textAlign: 'center', pt:1 }}>
-                        Mood Report
-                    </Typography>
-                    <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-                        <Button
-                            onClick={() => setReportMode("day")}
-                            disabled={reportMode === "day"}
-                            variant={reportMode === 'day' ? 'contained' : 'outlined'}
-                            sx={{ mr: 1 }}
-                        >
-                            Daily
-                        </Button>
-                        <Button
-                            onClick={() => setReportMode("week")}
-                            disabled={reportMode === "week"}
-                            variant={reportMode === 'week' ? 'contained' : 'outlined'}
-                            sx={{ mr: 1 }}
-                        >
-                            Weekly
-                        </Button>
-                        <Button
-                            onClick={() => setReportMode("month")}
-                            disabled={reportMode === "month"}
-                            variant={reportMode === 'month' ? 'contained' : 'outlined'}
-                        >
-                            Monthly
-                        </Button>
-                    </Box>
-                    <Box sx={{ width: "100%", height: 300, flexGrow: 1 }}>
-                        <ResponsiveContainer>
-                            <BarChart data={aggregateEmotions(entries, reportMode)}>
-                                <XAxis dataKey="period" />
-                                <YAxis allowDecimals={false} />
-                                <Tooltip />
-                                <Legend formatter={renderLegendText} /> 
-                                <Bar dataKey="sadness" fill={theme.palette.mode === 'dark' ? '#1565C0' : '#BBDEFB'} /> 
-                                <Bar dataKey="angry" fill={theme.palette.mode === 'dark' ? '#f44336' : '#ef5350'} />
-                                <Bar dataKey="neutral" fill={theme.palette.mode === 'dark' ? '#bdbdbd' : '#9e9e9e'} />
-                                <Bar dataKey="joy" fill={theme.palette.mode === 'dark' ? '#F9A825' : '#FFF59D'} />
-                                <Bar dataKey="disgust" fill={theme.palette.mode === 'dark' ? '#2E7D32' : '#D4EDDA'} />
-                                <Bar dataKey="fear" fill={theme.palette.mode === 'dark' ? '#6A1B9A' : '#E1BEE7'} />
-                                <Bar dataKey="surprise" fill={theme.palette.mode === 'dark' ? '#EC407A' : '#F8BBD0'} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </Box>
+                    {insightsViewMode === "Informative" ? (
+                        entries.length > 0 ? (
+                            <Box sx={scrollbarStyles(theme)}>
+                                <Box sx={{ p: theme.spacing(1.5), pr: theme.spacing(1)  }}>
+                                    {entries.map(entry => {
+                                        const rawEmotion = extractEmotionFromContent(entry.content);
+                                        const cardEmotionColor = rawEmotion ? getEmotionColor(rawEmotion, theme) : theme.palette.text.disabled;
+
+                                        let cardDisplayText = rawEmotion;
+                                        if (rawEmotion?.toLowerCase() === 'anger' || rawEmotion?.toLowerCase() === 'angry') {
+                                            cardDisplayText = 'Anger';
+                                        }
+
+                                        return (
+                                            <Card
+                                                key={entry.date}
+                                                sx={{
+                                                    width: '100%',
+                                                    mb: 2,
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    borderLeft: `5px solid ${cardEmotionColor}`,
+                                                    borderRadius: '8px',
+                                                    '&:last-child': {
+                                                        mb: 0,
+                                                    }
+                                                }}
+                                            >
+                                                <CardActionArea onClick={() => handleCardClick(entry)} sx={{ flexGrow: 1 }}>
+                                                    <CardContent sx={{ p: 3 }}>
+                                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5  }}>
+                                                            <Typography
+                                                                variant="subtitle1"
+                                                                color="text.secondary"
+                                                                sx={{ fontSize: theme.typography.pxToRem(18), fontWeight: 'bold' }}
+                                                            >
+                                                                {formatDate(entry.date)}
+                                                            </Typography>
+                                                            {cardDisplayText && (
+                                                                <Typography
+                                                                    variant="body1"
+                                                                    sx={{ fontSize: theme.typography.pxToRem(16), color: cardEmotionColor, fontWeight: 'bold', textTransform: 'capitalize' }}
+                                                                >
+                                                                    {cardDisplayText}
+                                                                </Typography>
+                                                            )}
+                                                        </Box>
+
+                                                        <Typography
+                                                            variant="body1"
+                                                            sx={{
+                                                                fontSize: theme.typography.pxToRem(17),
+                                                                lineHeight: 1.65,
+                                                                display: '-webkit-box',
+                                                                WebkitLineClamp: 5,
+                                                                WebkitBoxOrient: 'vertical',
+                                                                overflow: 'hidden',
+                                                                textOverflow: 'ellipsis',
+                                                                minHeight: '8.25em'
+                                                            }}
+                                                        >
+                                                            {getEntryPreview(entry.content)}
+                                                        </Typography>
+                                                    </CardContent>
+                                                </CardActionArea>
+                                            </Card>
+                                        );
+                                    })}
+                                </Box>
+                            </Box>
+                        ) : (
+                            <Typography sx={{ textAlign: 'center', mt: 3 }}>No journal entries to display.</Typography>
+                        )
+                    ) : (
+                        <Box sx={{
+                            flexGrow: 1,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            height: '100%',
+                        }}>
+                            {entries.length > 0 || TOTAL_GRID_SQUARES_TARGET > 0 ? (
+                                <Box
+                                    sx={{
+                                        flexGrow: 1,
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(10, 1fr)',
+                                        gap: theme.spacing(0.75),
+                                        p: theme.spacing(0.75),
+                                        direction: 'ltr',
+                                        alignContent: 'flex-start',
+                                        ...scrollbarStyles(theme)
+                                    }}
+                                >
+                                    {[...entries].reverse().map(entry => {
+                                        const rawEmotion = extractEmotionFromContent(entry.content);
+                                        const squareColor = rawEmotion ? getEmotionColor(rawEmotion, theme) : theme.palette.grey[700];
+                                        let displayEmotionText = rawEmotion || "Unknown";
+                                        if (rawEmotion?.toLowerCase() === 'anger' || rawEmotion?.toLowerCase() === 'angry') {
+                                            displayEmotionText = 'Anger';
+                                        }
+
+                                        return (
+                                            <MuiTooltip
+                                                key={entry.date}
+                                                title={
+                                                    <React.Fragment>
+                                                        <Typography variant="caption" display="block" sx={{ fontWeight: 'bold' }}>{formatDate(entry.date)}</Typography>
+                                                        <Typography variant="caption" display="block" sx={{ textTransform: 'capitalize' }}>{displayEmotionText}</Typography>
+                                                    </React.Fragment>
+                                                }
+                                                arrow
+                                                placement="top"
+                                            >
+                                                <Box
+                                                    onClick={() => handleEntrySelect(entry)}
+                                                    sx={{
+                                                        aspectRatio: '1 / 1',
+                                                        bgcolor: squareColor,
+                                                        borderRadius: '4px',
+                                                        cursor: 'pointer',
+                                                        transition: 'transform 0.15s ease-out, box-shadow 0.15s ease-out',
+                                                        '&:hover': {
+                                                            transform: 'scale(1.05)',
+                                                            boxShadow: theme.shadows[6],
+                                                        }
+                                                    }}
+                                                />
+                                            </MuiTooltip>
+                                        );
+                                    })}
+                                    {Array.from({ length: Math.max(0, TOTAL_GRID_SQUARES_TARGET - entries.length) }).map((_, index) => (
+                                        <Box
+                                            key={`placeholder-${index}`}
+                                            sx={{
+                                                aspectRatio: '1 / 1',
+                                                border: `1px dashed ${theme.palette.divider}`,
+                                                borderRadius: '4px',
+                                                bgcolor: alpha(theme.palette.action.hover, 0.05),
+                                            }}
+                                        />
+                                    ))}
+                                </Box>
+                            ) : (
+                                <Box sx={{flexGrow:1, display:'flex', alignItems:'center', justifyContent:'center'}}>
+                                    <Typography color="text.secondary" variant="h6">
+                                        No entries to visualize.
+                                    </Typography>
+                                </Box>
+                            )}
+                        </Box>
+                    )}
                 </Paper>
 
                 <Paper
                     sx={{
-                        p: 2.5,
+                        p: 1,
                         flex: { xs: '1 1 auto', md: '1 1 0%' },
                         minWidth: 0,
                         borderRadius: '16px',
@@ -313,14 +550,7 @@ function InsightsPage({ entries, theme, reportMode, setReportMode, aggregateEmot
                         borderLeft: { md: `1px solid ${theme.palette.divider}` },
                     }}
                 >
-                    <Box sx={{ flexGrow: 1, pt: 1 }}>
-                        <Typography variant="body1" sx={{ fontSize: '1.125rem', color: 'text.primary', pt: 1 }}>
-                            Additional Insights
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{mt: 1, fontSize: '1rem' }}>
-                            More detailed analysis and trends will be available here in future updates.
-                        </Typography>
-                    </Box>
+                    <EmotionSummaryList />
                 </Paper>
             </Box>
         </>
@@ -392,10 +622,10 @@ const baseThemeOptions = {
                     },
                 }),
                 standardError: ({ theme }) => ({
-                    color: theme.palette.primary.main, 
-                    backgroundColor: alpha(theme.palette.primary.main, theme.palette.mode === 'light' ? 0.12 : 0.18), 
+                    color: theme.palette.primary.main,
+                    backgroundColor: alpha(theme.palette.primary.main, theme.palette.mode === 'light' ? 0.12 : 0.18),
                     '& .MuiAlert-icon': {
-                        color: theme.palette.primary.main, 
+                        color: theme.palette.primary.main,
                     },
                 }),
                 standardWarning: ({ theme }) => ({
@@ -407,19 +637,9 @@ const baseThemeOptions = {
                 }),
             },
         },
-         MuiSelect: { // Added default styles for Select for consistency
+         MuiSelect: {
             styleOverrides: {
                 root: ({theme}) => ({
-                    // Example: if you want to ensure the Select border matches other inputs
-                    // '& .MuiOutlinedInput-notchedOutline': {
-                    //     borderColor: theme.palette.divider,
-                    // },
-                    // '&:hover .MuiOutlinedInput-notchedOutline': {
-                    //     borderColor: theme.palette.text.primary,
-                    // },
-                    // '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    //     borderColor: theme.palette.primary.main,
-                    // },
                 }),
             }
         }
@@ -486,11 +706,10 @@ const darkTheme = createTheme({
 function App() {
     // State hooks
     const [themeMode, setThemeMode] = useState(() => {
-        // Load theme preference from localStorage or default to 'system'
         const storedThemeMode = localStorage.getItem('appThemeMode');
         return storedThemeMode || 'system';
     });
-    const [isDarkModeActive, setIsDarkModeActive] = useState(false); // Actual theme state (light/dark)
+    const [isDarkModeActive, setIsDarkModeActive] = useState(false);
 
     const [entries, setEntries] = useState([]);
     const [selectedEntry, setSelectedEntry] = useState(null);
@@ -498,40 +717,39 @@ function App() {
     const [status, setStatus] = useState({ message: "", severity: "info" });
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [hoverOpen, setHoverOpen] = useState(false);
-    const [entryText, setEntryText] = useState(""); // For the new entry text field
+    const [entryText, setEntryText] = useState("");
     const [saving, setSaving] = useState(false);
-    const [currentView, setCurrentView] = useState('main'); 
+    const [currentView, setCurrentView] = useState('main');
     const [isEditingSelectedEntry, setIsEditingSelectedEntry] = useState(false);
-    const [editedContentText, setEditedContentText] = useState(""); // For editing an existing entry's main text
-    const [lastDetectedEmotion, setLastDetectedEmotion] = useState(""); // Used for flash background
+    const [editedContentText, setEditedContentText] = useState("");
+    const [lastDetectedEmotion, setLastDetectedEmotion] = useState("");
     const [flashColor, setFlashColor] = useState(null);
     const [showAllEntriesInDrawer, setShowAllEntriesInDrawer] = useState(false);
     const [isDictating, setIsDictating] = useState(false);
-    const [reportMode, setReportMode] = useState("week"); 
+    // const [reportMode, setReportMode] = useState("week"); // No longer used by InsightsPage directly
 
 
     // Effect to update the active theme based on themeMode and system preference
     useEffect(() => {
         const prefersDarkMQ = window.matchMedia('(prefers-color-scheme: dark)');
 
-        const updateActiveTheme = (event) => { // event is optional, used by listener
+        const updateActiveTheme = (event) => {
             if (themeMode === 'dark') {
                 setIsDarkModeActive(true);
             } else if (themeMode === 'light') {
                 setIsDarkModeActive(false);
-            } else { // 'system'
-                // Use event.matches if available (from listener), otherwise query directly
+            } else {
                 setIsDarkModeActive(event ? event.matches : prefersDarkMQ.matches);
             }
         };
 
-        updateActiveTheme(); // Set initial theme based on current settings
+        updateActiveTheme();
 
         if (themeMode === 'system') {
             prefersDarkMQ.addEventListener('change', updateActiveTheme);
             return () => prefersDarkMQ.removeEventListener('change', updateActiveTheme);
         }
-    }, [themeMode]); // Re-run when themeMode changes
+    }, [themeMode]);
 
     // Effect to save theme preference to localStorage
     useEffect(() => {
@@ -540,8 +758,8 @@ function App() {
 
     // Memoized MUI theme based on the active dark mode state
     const muiTheme = useMemo(() => (isDarkModeActive ? darkTheme : lightTheme), [isDarkModeActive]);
-    const userName = "Michael"; 
-    const isDrawerVisuallyOpen = drawerOpen || hoverOpen; 
+    const userName = "Michael";
+    const isDrawerVisuallyOpen = drawerOpen || hoverOpen;
 
     // Function to close status alert
     const handleCloseStatus = () => setStatus({ message: "", severity: "info" });
@@ -561,29 +779,19 @@ function App() {
 
     // Function to flash background color based on emotion
     const flashBackground = (emotion) => {
-        const emotionUpper = emotion?.toUpperCase(); 
-        // Determine flash color based on current theme (isDarkModeActive)
+        const emotionUpper = emotion?.toUpperCase();
         const currentPalette = isDarkModeActive ? darkTheme.palette : lightTheme.palette;
         let colorToSet = null;
-        if (emotionUpper === "ANGER") colorToSet = isDarkModeActive ? '#C62828' : '#F8D7DA'; 
-        else if (emotionUpper === "DISGUST") colorToSet = isDarkModeActive ? '#2E7D32' : '#D4EDDA'; 
-        else if (emotionUpper === "FEAR") colorToSet = isDarkModeActive ? '#6A1B9A' : '#E1BEE7'; 
-        else if (emotionUpper === "JOY") colorToSet = isDarkModeActive ? '#F9A825' : '#FFF59D'; 
-        else if (emotionUpper === "NEUTRAL") colorToSet = isDarkModeActive ? '#616161' : '#E0E0E0'; 
-        else if (emotionUpper === "SADNESS") colorToSet = isDarkModeActive ? '#1565C0' : '#BBDEFB'; 
-        else if (emotionUpper === "SURPRISE") colorToSet = isDarkModeActive ? '#EC407A' : '#F8BBD0'; 
+        const baseFlashColor = getEmotionColor(emotion, muiTheme);
+        if (baseFlashColor !== muiTheme.palette.text.disabled) {
+             colorToSet = alpha(baseFlashColor, 0.3);
+        }
+
 
         if (colorToSet) {
             setFlashColor(colorToSet);
-            setTimeout(() => setFlashColor(null), 1000); 
+            setTimeout(() => setFlashColor(null), 1000);
         }
-    };
-
-    // Function to format date string
-    const formatDate = (dateString) => {
-        if (!dateString) return "Invalid Date";
-        const date = new Date(dateString + 'T00:00:00Z');
-        return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
     };
 
     // Function to get time-based greeting
@@ -593,7 +801,7 @@ function App() {
         return name ? `${timeOfDay}, ${name}` : timeOfDay;
     };
 
-    // Function to get current date string in YYYY-MM-DD format
+    // Function to get current date string in<y_bin_358>-MM-DD format
     const getCurrentDateString = () => new Date().toISOString().split('T')[0];
 
     // Function to refresh the list of entries
@@ -603,12 +811,12 @@ function App() {
             const freshEntries = (await invoke("read_entries")) || [];
             const sorted = freshEntries.sort((a, b) => new Date(b.date) - new Date(a.date));
             setEntries(sorted);
-            return sorted; // Return sorted entries for immediate use
+            return sorted;
         } catch (err) {
             console.error("Error refreshing entries list:", err);
             setStatus({ message: `Error refreshing entries: ${err.message || String(err)}`, severity: "error" });
             setEntries([]);
-            return []; // Return empty array on error
+            return [];
         } finally {
             setLoading(false);
         }
@@ -668,7 +876,7 @@ function App() {
 
     // Function to save a new journal entry or update today's entry
     const handleSaveEntry = async () => {
-        const currentEntryText = entryText.trim(); // Use the text from the new entry field
+        const currentEntryText = entryText.trim();
         if (!currentEntryText) {
             setStatus({ message: "Entry cannot be empty.", severity: "warning" });
             return;
@@ -690,49 +898,48 @@ function App() {
 
         let generatedSuggestion = "Suggestion not available.";
         try {
-            // *** MODIFIED INVOKE CALL FOR generate_suggestion_cmd ***
-            generatedSuggestion = await invoke("generate_suggestion_cmd", { 
-                entryTitle: "Journal Entry", // Default title for new entries
+            generatedSuggestion = await invoke("generate_suggestion_cmd", {
+                entryTitle: "Journal Entry",
                 entryContent: currentEntryText,
-                suggestionType: null // Defaulting to null as requested
+                suggestionType: null
             });
         } catch (suggestionError) {
             console.error("Error generating suggestion:", suggestionError);
             statusMessage += `AI suggestion generation failed: ${suggestionError.message || String(suggestionError)}.`;
-            statusSeverity = "warning"; // Keep warning or escalate if it was info
+            statusSeverity = "warning";
         }
 
         const contentToSave = `${currentEntryText}\n\n🧠 Emotion: ${classifiedEmotion}\n\n💡 Suggestion: ${generatedSuggestion}`;
         const currentDate = getCurrentDateString();
         const existingEntryForToday = entries.find(entry => entry.date === currentDate);
         const operation = existingEntryForToday ? "update_entry" : "create_entry";
-        const payload = existingEntryForToday 
+        const payload = existingEntryForToday
             ? { date: currentDate, newTitle: existingEntryForToday.title || "Journal Entry", newContent: contentToSave, newPassword: existingEntryForToday.password }
             : { title: "Journal Entry", content: contentToSave, password: null };
 
         try {
             await invoke(operation, payload);
             const successVerbText = operation === "create_entry" ? "saved" : "updated";
-            
-            if (statusSeverity !== "warning") { // If no errors so far
+
+            if (statusSeverity !== "warning") {
                  statusMessage = `Entry ${successVerbText} successfully!`;
                  statusSeverity = "success";
-            } else { // Prepend to existing warning message
+            } else {
                 statusMessage = `Entry ${successVerbText} with issues: ${statusMessage}`;
             }
             if (classifiedEmotion && classifiedEmotion.toLowerCase() !== "unknown") {
                 statusMessage += ` Detected Emotion: ${classifiedEmotion.toUpperCase()}`;
                 flashBackground(classifiedEmotion);
             }
-            
-            setEntryText(""); // Clear the new entry field
+
+            setEntryText("");
             setShowAllEntriesInDrawer(false);
             const updatedEntries = await refreshEntriesList();
             const newOrUpdatedEntry = updatedEntries.find(e => e.date === currentDate);
-            
+
             if (newOrUpdatedEntry) {
                 setSelectedEntry(newOrUpdatedEntry);
-                setCurrentView('main'); // Ensure view is main to show the selected entry
+                setCurrentView('main');
                 setIsEditingSelectedEntry(false);
             } else {
                  statusMessage = `Entry ${successVerbText}, but could not auto-select it.`;
@@ -753,8 +960,8 @@ function App() {
         if (selectedEntry) {
             setEditedContentText(getContentForEditing(selectedEntry.content));
             setIsEditingSelectedEntry(true);
-            setStatus({ message: "", severity: "info" }); // Clear previous status
-            setLastDetectedEmotion(""); // Clear last emotion before new edit
+            setStatus({ message: "", severity: "info" });
+            setLastDetectedEmotion("");
         }
     };
 
@@ -789,18 +996,17 @@ function App() {
 
         let generatedSuggestion = "Suggestion not available.";
         try {
-            // *** MODIFIED INVOKE CALL FOR generate_suggestion_cmd ***
-            generatedSuggestion = await invoke("generate_suggestion_cmd", { 
-                entryTitle: selectedEntry.title || "Journal Entry", // Use existing title or default
+            generatedSuggestion = await invoke("generate_suggestion_cmd", {
+                entryTitle: selectedEntry.title || "Journal Entry",
                 entryContent: currentEditedContent,
-                suggestionType: null // Defaulting to null as requested
+                suggestionType: null
             });
         } catch (suggestionError) {
             console.error("Error generating suggestion during edit:", suggestionError);
             statusMessage += `AI suggestion generation failed: ${suggestionError.message || String(suggestionError)}.`;
             statusSeverity = "warning";
         }
-        
+
         const contentToSave = `${currentEditedContent}\n\n🧠 Emotion: ${classifiedEmotion}\n\n💡 Suggestion: ${generatedSuggestion}`;
 
         try {
@@ -824,7 +1030,7 @@ function App() {
 
             const updatedEntries = await refreshEntriesList();
             const updatedEntry = updatedEntries.find(entry => entry.date === selectedEntry.date);
-            setSelectedEntry(updatedEntry || null); 
+            setSelectedEntry(updatedEntry || null);
             setIsEditingSelectedEntry(false);
             setEditedContentText("");
         } catch (err) {
@@ -854,10 +1060,10 @@ function App() {
             const remainingEntries = await refreshEntriesList();
             setShowAllEntriesInDrawer(false);
             if (selectedEntry && selectedEntry.date === entryToDelete.date) {
-                setSelectedEntry(null); // Deselect if it was the one deleted
-                handleNewEntryClick(); // Go to new entry view
+                setSelectedEntry(null);
+                handleNewEntryClick();
             } else if (remainingEntries.length === 0) {
-                 handleNewEntryClick(); // Go to new entry view if no entries left
+                 handleNewEntryClick();
             }
         } catch (err) {
             console.error("Error deleting entry:", err);
@@ -874,13 +1080,13 @@ function App() {
     const handleDrawerHoverClose = () => setHoverOpen(false);
 
 
-    // Handler for selecting an entry from the drawer
+    // Handler for selecting an entry from the drawer OR Insights page card
     const handleEntrySelect = (entry) => {
         setSelectedEntry(entry);
         setIsEditingSelectedEntry(false);
-        setEditedContentText(""); // Clear any stale edited text
-        setEntryText(""); // Clear new entry field
-        setStatus({ message: "", severity: "info" }); // Clear status
+        setEditedContentText("");
+        setEntryText("");
+        setStatus({ message: "", severity: "info" });
         setLastDetectedEmotion("");
         setCurrentView('main');
     };
@@ -890,7 +1096,7 @@ function App() {
         setSelectedEntry(null);
         setIsEditingSelectedEntry(false);
         setEditedContentText("");
-        setEntryText(""); // Clear new entry field
+        setEntryText("");
         setStatus({ message: "", severity: "info" });
         setLastDetectedEmotion("");
         setCurrentView('main');
@@ -909,7 +1115,7 @@ function App() {
     // Handler for "Insights" button click
     const handleInsightsClick = () => {
         setCurrentView('insights');
-        setSelectedEntry(null); 
+        setSelectedEntry(null);
         setIsEditingSelectedEntry(false);
         setStatus({ message: "", severity: "info" });
         setLastDetectedEmotion("");
@@ -924,42 +1130,6 @@ function App() {
     // Handler to toggle showing all entries in the drawer
     const handleToggleShowEntries = () => {
         setShowAllEntriesInDrawer(prevShowAll => !prevShowAll);
-    };
-
-    // Function to aggregate emotions for the graph
-    const aggregateEmotions = (entriesToAggregate, mode = "week") => {
-        const grouped = {};
-        const normalizeEmotion = (e) => {
-            if (!e) return null;
-            const lower = e.toLowerCase();
-            if (lower === "anger") return "angry"; 
-            if (lower === "disgust") return "disgust";
-            if (lower === "fear") return "fear";
-            if (lower === "joy") return "joy";
-            if (lower === "neutral") return "neutral";
-            if (lower === "sadness") return "sadness"; 
-            if (lower === "surprise") return "surprise";
-            return lower; 
-        };
-
-        entriesToAggregate.forEach((entry) => {
-            // Use extractEmotionFromContent which now correctly parses from the full content string
-            const rawEmotion = extractEmotionFromContent(entry.content);
-            const emotion = normalizeEmotion(rawEmotion); 
-            if (!emotion) return;
-
-            let key;
-            if (mode === "day") key = dayjs(entry.date).format("YYYY-MM-DD"); 
-            else if (mode === "week") key = dayjs(entry.date).startOf("week").format("YYYY-MM-DD");
-            else key = dayjs(entry.date).startOf("month").format("YYYY-MM");
-
-            if (!grouped[key]) grouped[key] = {};
-            grouped[key][emotion] = (grouped[key][emotion] || 0) + 1;
-        });
-
-        return Object.entries(grouped).map(([period, emotions]) => ({
-            period, ...emotions,
-        })).sort((a,b) => dayjs(a.period).valueOf() - dayjs(b.period).valueOf());
     };
 
 
@@ -998,7 +1168,7 @@ function App() {
                         Recent
                     </Typography>
                 )}
-               
+
 
                 <List sx={{ pt: 0 }}>
                     {loading && isDrawerVisuallyOpen && (
@@ -1044,7 +1214,7 @@ function App() {
             <Box sx={{ marginTop: 'auto', flexShrink: 0 }}>
                 <Divider />
                 <List>
-                    {[ 
+                    {[
                         { text: 'Insights', icon: <AutoAwesomeIcon />, handler: handleInsightsClick, view: 'insights' },
                         { text: 'Settings', icon: <SettingsIcon />, handler: handleSettingsClick, view: 'settings' },
                     ].map((item) => (
@@ -1074,7 +1244,7 @@ function App() {
             <CssBaseline />
             <Box sx={{
                 display: 'flex', height: '100vh',
-                bgcolor: flashColor || muiTheme.palette.background.default, // Use muiTheme here
+                bgcolor: flashColor || muiTheme.palette.background.default,
                 transition: 'background-color 0.5s ease',
             }}>
                 <AppBar position="fixed" isPinnedOpen={drawerOpen}>
@@ -1107,7 +1277,7 @@ function App() {
                         flexGrow: 1, p: 3, display: 'flex', flexDirection: 'column',
                         justifyContent: (currentView === 'main' && selectedEntry) || currentView === 'settings' || currentView === 'insights'
                                           ? 'flex-start' : 'flex-end',
-                        height: '100%', overflow: 'hidden'
+                        height: '100%', overflow: 'hidden' // Outer main box should hide overflow
                     }}
                 >
                     <Toolbar />
@@ -1123,84 +1293,159 @@ function App() {
                     )}
 
                     {currentView === 'settings' ? (
-                        <CombinedSettingsPage 
-                            currentThemeMode={themeMode} 
-                            onThemeModeChange={handleThemeModeChange} 
-                            onBack={handleNewEntryClick} 
+                        <CombinedSettingsPage
+                            currentThemeMode={themeMode}
+                            onThemeModeChange={handleThemeModeChange}
+                            onBack={handleNewEntryClick}
                         />
                     ) : currentView === 'insights' ? (
                         <InsightsPage
-                            entries={entries} theme={muiTheme} reportMode={reportMode} // Pass muiTheme to InsightsPage
-                            setReportMode={setReportMode} aggregateEmotions={aggregateEmotions}
-                            onBack={handleNewEntryClick} 
+                            entries={entries}
+                            theme={muiTheme}
+                            onBack={handleNewEntryClick}
+                            handleEntrySelect={handleEntrySelect}
                         />
-                    ) : selectedEntry && currentView === 'main' ? ( 
+                    ) : selectedEntry && currentView === 'main' ? (
                         <>
                             <Box sx={{ mb: 2, alignSelf: 'flex-start', flexShrink: 0 }}>
                                 <Button startIcon={<ArrowBackIcon />} onClick={handleNewEntryClick} variant="outlined">
                                     Back to Journal
                                 </Button>
                             </Box>
-                            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, width: '100%', flexGrow: 1, overflow: 'auto' }}>
-                                <Paper sx={{ p: 3, flex: { xs: '1 1 auto', md: '2 1 0%' }, minWidth: 0, overflowY: 'auto', borderRadius: '16px', display: 'flex', flexDirection: 'column' }}>
+                            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, width: '100%', flexGrow: 1, overflow: 'hidden' }}>
+                                <Paper sx={{
+                                    p: 1,
+                                    flex: { xs: '1 1 auto', md: '2 1 0%' },
+                                    minWidth: 0,
+                                    borderRadius: '16px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    overflow: 'hidden'
+                                }}>
                                     {isEditingSelectedEntry ? (
-                                        <>
-                                            <TextField
-                                                value={editedContentText} // This is set by getContentForEditing
-                                                onChange={(e) => setEditedContentText(e.target.value)}
-                                                multiline minRows={10} fullWidth variant="outlined"
-                                                sx={{ fontSize: '1.125rem', mb: 2, flexGrow: 1, '& .MuiOutlinedInput-root': { borderRadius: '8px' }, pt: 0.5 }}
-                                                placeholder="Edit your thoughts here..."
-                                            />
-                                            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 'auto', pt: 2, flexShrink: 0 }}>
-                                                <Button variant="outlined" color="inherit" startIcon={<CancelIcon />} onClick={handleCancelEditSelectedEntry} disabled={saving}>Cancel</Button>
-                                                <Button variant="contained" color="primary" startIcon={<SaveIcon />} onClick={handleConfirmUpdateSelectedEntry} disabled={saving || !editedContentText.trim()}>Save Changes</Button>
+                                        <Box sx={scrollbarStyles(muiTheme)}>
+                                           <Box sx={{
+                                               p: muiTheme.spacing(1.5),
+                                               pr: muiTheme.spacing(1),
+                                               height: '100%',
+                                               display: 'flex',
+                                               flexDirection: 'column'
+                                            }}>
+                                                <TextField
+                                                    value={editedContentText}
+                                                    onChange={(e) => setEditedContentText(e.target.value)}
+                                                    multiline
+                                                    rows={10}
+                                                    fullWidth
+                                                    variant="outlined"
+                                                    sx={{
+                                                        fontSize: '1.125rem',
+                                                        flexGrow: 1,
+                                                        '& .MuiOutlinedInput-root': {
+                                                            borderRadius: '8px',
+                                                            height: '100%',
+                                                            '& .MuiOutlinedInput-input': {
+                                                                height: '100% !important',
+                                                                overflowY: 'auto !important',
+                                                            }
+                                                        },
+                                                        pt: muiTheme.spacing(1),
+                                                        mb: 2,
+                                                    }}
+                                                    placeholder="Edit your thoughts here..."
+                                                />
+                                                <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 'auto', pt: 2, flexShrink: 0 }}>
+                                                    <Button variant="outlined" color="inherit" startIcon={<CancelIcon />} onClick={handleCancelEditSelectedEntry} disabled={saving}>Cancel</Button>
+                                                    <Button variant="contained" color="primary" startIcon={<SaveIcon />} onClick={handleConfirmUpdateSelectedEntry} disabled={saving || !editedContentText.trim()}>Save Changes</Button>
+                                                </Box>
                                             </Box>
-                                        </>
+                                        </Box>
                                     ) : (
-                                        <>
-                                            <Typography variant="body1" sx={{ fontSize: '1.125rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word', flexGrow: 1, mb: 2, overflowY: 'auto', pt: 1 }}>
-                                                {getMainContent(selectedEntry.content)}
-                                            </Typography>
-                                            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 'auto', pt: 2, flexShrink: 0 }}>
-                                                <Button variant="outlined" startIcon={<EditIcon />} onClick={handleStartEditSelectedEntry} disabled={saving}>Edit Entry</Button>
-                                                <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => handleDeleteEntry(selectedEntry)} disabled={saving}>Delete Entry</Button>
+                                        <Box sx={scrollbarStyles(muiTheme)}>
+                                            <Box sx={{p: muiTheme.spacing(1.5), pr: muiTheme.spacing(1) }}>
+                                                <Typography variant="body1" sx={{ fontSize: '1.125rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word', mb: 2,
+                                                    pt: muiTheme.spacing(1)
+                                                }}>
+                                                    {getMainContent(selectedEntry.content)}
+                                                </Typography>
                                             </Box>
-                                        </>
+                                        </Box>
+                                    )}
+                                    {!isEditingSelectedEntry && (
+                                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 'auto', pt: 2, flexShrink: 0,
+                                                    pl: muiTheme.spacing(1), pr: muiTheme.spacing(1), pb: muiTheme.spacing(1)
+                                                }}>
+                                            <Button variant="outlined" startIcon={<EditIcon />} onClick={handleStartEditSelectedEntry} disabled={saving}>Edit Entry</Button>
+                                            <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => handleDeleteEntry(selectedEntry)} disabled={saving}>Delete Entry</Button>
+                                        </Box>
                                     )}
                                 </Paper>
 
-                                {selectedEntry && !isEditingSelectedEntry && ( 
-                                    <Paper sx={{ p: 2.5, flex: { xs: '1 1 auto', md: '1 1 0%' }, minWidth: 0, borderRadius: '16px', display: 'flex', flexDirection: 'column', overflowY: 'auto', borderLeft: {md: `1px solid ${muiTheme.palette.divider}`} }}>
-                                        <Box sx={{ flexGrow: 1, pt:1 }}>
-                                            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'medium', fontSize: '1.1rem' }}>Detected Emotion:</Typography>
-                                            <Typography variant="body1" sx={{ fontSize: '1.2rem', mb: 2.5, color: extractEmotionFromContent(selectedEntry.content) ? 'text.primary' : 'text.secondary', textTransform: 'capitalize' }}>
-                                                {extractEmotionFromContent(selectedEntry.content) || "Not available"}
-                                            </Typography>
+                                {selectedEntry && !isEditingSelectedEntry && (
+                                    <Paper sx={{
+                                        p: 1,
+                                        flex: { xs: '1 1 auto', md: '1 1 0%' },
+                                        minWidth: 0,
+                                        borderRadius: '16px',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        overflow: 'hidden',
+                                        borderLeft: {md: `1px solid ${muiTheme.palette.divider}`}
+                                    }}>
+                                        <Box sx={scrollbarStyles(muiTheme)}>
+                                          <Box sx={{p: muiTheme.spacing(1.5), pr: muiTheme.spacing(1)}}>
+                                            {/* MODIFIED: Detected Emotion Card */}
+                                            <Card sx={{ 
+                                                mb: 2, 
+                                                borderRadius: '8px', 
+                                                border: `1.5px solid ${alpha(muiTheme.palette.text.primary, 0.25)}` /* More apparent border */
+                                            }}>
+                                                <CardContent sx={{ p: 2 }}>
+                                                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75 /* Space between label and value */ }}>
+                                                        <Typography variant="subtitle1" sx={{ fontWeight: 'medium', fontSize: '1.1rem' }}>
+                                                            Detected Emotion:
+                                                        </Typography>
+                                                        <Typography variant="body1" sx={{ fontSize: '1.2rem', color: getEmotionColor(extractEmotionFromContent(selectedEntry.content), muiTheme) , textTransform: 'capitalize' }}>
+                                                            {extractEmotionFromContent(selectedEntry.content) || "Not available"}
+                                                        </Typography>
+                                                    </Box>
+                                                </CardContent>
+                                            </Card>
 
-                                            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'medium', fontSize: '1.1rem', mb:1 }}>AI Suggestions:</Typography>
-                                            {(() => { // IIFE to handle suggestion display
-                                                const suggestion = extractSuggestionFromContent(selectedEntry.content);
-                                                if (suggestion) {
-                                                    return (
-                                                        <Typography variant="body1" sx={{ fontSize: '1.1rem', color: 'text.secondary', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                                                            {suggestion}
-                                                        </Typography>
-                                                    );
-                                                } else {
-                                                    return (
-                                                        <Typography variant="body1" sx={{ fontSize: '1.1rem', color: 'text.disabled' }}>
-                                                            No suggestion available for this entry.
-                                                        </Typography>
-                                                    );
-                                                }
-                                            })()}
+                                            {/* MODIFIED: AI Suggestions Card */}
+                                            <Card sx={{ 
+                                                borderRadius: '8px',
+                                                border: `1.5px solid ${alpha(muiTheme.palette.text.primary, 0.25)}` /* More apparent border */
+                                            }}>
+                                                <CardContent sx={{ p: 2 }}>
+                                                    <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'medium', fontSize: '1.1rem', mb:1, pt: muiTheme.spacing(0.5) }}>
+                                                        AI Suggestions:
+                                                    </Typography>
+                                                    {(() => {
+                                                        const suggestion = extractSuggestionFromContent(selectedEntry.content);
+                                                        if (suggestion) {
+                                                            return (
+                                                                <Typography variant="body1" sx={{ fontSize: '1.1rem', color: 'text.secondary', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                                                                    {suggestion}
+                                                                </Typography>
+                                                            );
+                                                        } else {
+                                                            return (
+                                                                <Typography variant="body1" sx={{ fontSize: '1.1rem', color: 'text.disabled' }}>
+                                                                    No suggestion available for this entry.
+                                                                </Typography>
+                                                            );
+                                                        }
+                                                    })()}
+                                                </CardContent>
+                                            </Card>
+                                          </Box>
                                         </Box>
                                     </Paper>
                                 )}
                             </Box>
                         </>
-                    ) : ( 
+                    ) : (
                         <>
                             <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', overflowY: 'auto' }}>
                                 <Typography variant="h4" color="text.secondary" sx={{ fontWeight: 'bold', mb: 3 }}>
