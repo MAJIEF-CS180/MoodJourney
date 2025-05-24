@@ -5,14 +5,32 @@ use rusqlite::ffi;
 use serde::{Deserialize, Serialize};
 use chrono::Local;
 use chrono::NaiveDate;
+use chrono::Utc;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Entry {
     pub date: String,
-    pub title: String,
+    pub title: Option<String>,
     pub content: Option<String>,
     pub password: Option<String>,
     pub image: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ChatSession {
+    pub id: String,
+    pub created_at: String,
+    pub last_modified_at: String,
+    pub title: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ChatMessage {
+    pub id: i64,
+    pub session_id: String,
+    pub sender: String,
+    pub content: String,
+    pub timestamp: String,
 }
 
 pub fn init_db() -> Result<()> {
@@ -24,6 +42,26 @@ pub fn init_db() -> Result<()> {
             content TEXT,
             password TEXT,
             image TEXT
+        )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS assistant_chat_sessions (
+            id TEXT PRIMARY KEY, -- Unique ID for the chat session (e.g., UUID)
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            last_modified_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            title TEXT -- A title for the chat, could be first user message snippet
+        )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS assistant_chat_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            sender TEXT NOT NULL, -- 'user' or 'assistant'
+            content TEXT NOT NULL,
+            timestamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (session_id) REFERENCES assistant_chat_sessions(id) ON DELETE CASCADE
         )",
         [],
     )?;
@@ -55,7 +93,7 @@ pub fn add_entry(entry: Entry) -> Result<()> {
     let conn = Connection::open("entries.db")?;
     conn.execute(
         "INSERT INTO entries (date, title, content, password, image) VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![entry.date, entry.title, entry.content, entry.password, entry.image],
+        params![entry.date, entry.title.as_ref(), entry.content, entry.password, entry.image],
     )?;
     Ok(())
 }
@@ -66,7 +104,7 @@ pub fn get_entries() -> Result<Vec<Entry>> {
     let entry_iter = stmt.query_map([], |row| {
         Ok(Entry {
             date: row.get(0)?,
-            title: row.get(1)?,
+            title: row.get(1).optional()?,
             content: row.get(2)?,
             password: row.get(3)?,
             image: row.get(4)?,
@@ -117,12 +155,101 @@ pub fn create_entry_with_now(title: &str, content: Option<&str>, password: Optio
     let date = Local::now().format("%Y-%m-%d").to_string();
     let entry = Entry {
         date,
-        title: title.to_string(),
+        title: Some(title.to_string()),
         content: content.map(|s| s.to_string()),
         password: password.map(|s| s.to_string()),
         image: image.map(|s| s.to_string()),
     };
     add_entry(entry)
+}
+
+pub fn create_new_chat_session() -> Result<String> {
+    let conn = Connection::open("entries.db")?;
+    let session_id = uuid::Uuid::new_v4().to_string();
+    let now = Utc::now().to_rfc3339(); // Or Local::now()
+    conn.execute(
+        "INSERT INTO assistant_chat_sessions (id, created_at, last_modified_at) VALUES (?1, ?2, ?3)",
+        params![session_id, now, now],
+    )?;
+    Ok(session_id)
+}
+
+pub fn save_chat_message(session_id: &str, sender: &str, content: &str) -> Result<()> {
+    let conn = Connection::open("entries.db")?;
+    let now = Utc::now().to_rfc3339();
+
+    if sender == "user" {
+        let current_title: Option<String> = conn.query_row(
+            "SELECT title FROM assistant_chat_sessions WHERE id = ?1",
+            params![session_id],
+            |row| row.get::<_, Option<String>>(0),
+        )
+        .optional()?
+        .flatten();
+
+        if current_title.is_none() || current_title.as_deref() == Some("") {
+             let new_title: String = content.chars().take(50).collect();
+             let final_title = if content.chars().count() > 50 { format!("{}...", new_title) } else { new_title };
+             conn.execute(
+                 "UPDATE assistant_chat_sessions SET title = ?1, last_modified_at = ?2 WHERE id = ?3",
+                 params![final_title, now, session_id],
+             )?;
+        }
+        else {
+             conn.execute(
+                 "UPDATE assistant_chat_sessions SET last_modified_at = ?1 WHERE id = ?2",
+                 params![now, session_id],
+             )?;
+        }
+    }
+    else {
+         conn.execute(
+             "UPDATE assistant_chat_sessions SET last_modified_at = ?1 WHERE id = ?2",
+             params![now, session_id],
+         )?;
+    }
+    conn.execute(
+        "INSERT INTO assistant_chat_messages (session_id, sender, content, timestamp) VALUES (?1, ?2, ?3, ?4)",
+        params![session_id, sender, content, now],
+    )?;
+    Ok(())
+}
+
+pub fn get_all_chat_sessions() -> Result<Vec<ChatSession>> {
+    let conn = Connection::open("entries.db")?;
+    let mut stmt = conn.prepare("SELECT id, created_at, last_modified_at, title FROM assistant_chat_sessions ORDER BY last_modified_at DESC")?;
+    let iter = stmt.query_map([], |row| {
+        Ok(ChatSession {
+            id: row.get(0)?,
+            created_at: row.get(1)?,
+            last_modified_at: row.get(2)?,
+            title: row.get(3).optional()?,
+        })
+    })?;
+    let mut sessions = Vec::new();
+    for session in iter {
+        sessions.push(session?);
+    }
+    Ok(sessions)
+}
+
+pub fn get_messages_for_session(session_id: &str) -> Result<Vec<ChatMessage>> {
+    let conn = Connection::open("entries.db")?;
+    let mut stmt = conn.prepare("SELECT id, session_id, sender, content, timestamp FROM assistant_chat_messages WHERE session_id = ?1 ORDER BY timestamp ASC")?;
+    let iter = stmt.query_map(params![session_id], |row| {
+        Ok(ChatMessage {
+            id: row.get(0)?,
+            session_id: row.get(1)?,
+            sender: row.get(2)?,
+            content: row.get(3)?,
+            timestamp: row.get(4)?,
+        })
+    })?;
+    let mut messages = Vec::new();
+    for msg in iter {
+        messages.push(msg?);
+    }
+    Ok(messages)
 }
 
 

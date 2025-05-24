@@ -10,15 +10,17 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use uuid::Uuid;
+use chrono::Local;
 
 use db::{
     init_db, create_entry_with_now, get_entries, get_entry_by_date, update_entry_by_date, delete_entry_by_date, Entry,
 };
 use dictation::{DictationModel, perform_dictation_cmd};
 use emotion::{EmotionModel, classify_emotion};
-use tauri::{command, AppHandle, Manager, State as TauriState, path::BaseDirectory};
+use tauri::{command, AppHandle, Manager, path::BaseDirectory};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
-use crate::suggestion::SuggestionModel;
+use serde::{Deserialize, Serialize};
+use crate::suggestion::generate_suggestion_via_api;
 
 pub struct SafeDictationModelWrapper(pub DictationModel);
 pub struct AppDictationModel(pub Arc<SafeDictationModelWrapper>);
@@ -29,11 +31,6 @@ pub struct SafeEmotionModelWrapper(pub EmotionModel);
 pub struct AppEmotionModel(pub Arc<SafeEmotionModelWrapper>);
 unsafe impl Send for SafeEmotionModelWrapper {}
 unsafe impl Sync for SafeEmotionModelWrapper {}
-
-pub struct SafeSuggestionModelWrapper(SuggestionModel);
-pub struct AppSuggestionModel(pub Arc<SafeSuggestionModelWrapper>);
-unsafe impl Send for SafeSuggestionModelWrapper {}
-unsafe impl Sync for SafeSuggestionModelWrapper {}
 
 // automatically creates entry with current local date
 // content and password are optional
@@ -135,89 +132,216 @@ async fn upload_image_file(app_handle: AppHandle, file_data_base64: String, orig
     Ok(format!("{}/{}", images_dir_name, new_file_name))
 }
 
-// generate AI suggestions
+// AI suggestions
 #[command]
-fn generate_suggestion_cmd(
-    entry_title: Option<String>, 
-    entry_content: Option<String>, 
-    suggestion_type: Option<String>, 
-    suggestion_model_state: TauriState<'_, AppSuggestionModel>
+async fn generate_suggestion_cmd(
+    entry_title: Option<String>,
+    entry_content: Option<String>,
 ) -> Result<String, String> {
-
-    // Changed prompt_parts to Vec<String> to own the formatted strings
     let mut prompt_parts: Vec<String> = Vec::new();
 
-    prompt_parts.push("Here are some examples of journal entries and helpful suggestions:".to_string());
-    prompt_parts.push("Journal Entry: I felt anxious about my presentation today, but it went okay.".to_string());
-    prompt_parts.push("Suggestion: What specific part of the presentation made you feel most relieved when it was over?".to_string());
-    prompt_parts.push("Journal Entry: I'm grateful for a quiet evening at home.".to_string());
-    prompt_parts.push("Suggestion: How can you create more moments of quiet and gratitude this week?".to_string());
-    prompt_parts.push("\nNow, consider the following journal entry:".to_string());
+    let initial_prompt_block = r#"
+    You are a helpful journaling assistant called "MoodJourney".
+    Your goal is to provide three concise, actionable, and encouraging suggestions based on the user's journal entry.
+    The suggestions should be things the user could consider doing or thinking about related to their entry.
 
-    // Used .as_ref() before .filter() to avoid moving entry_title
+    Here's an example of how to respond to an entry corresponding to the emotion "sadness":
+    --- Example Start ---
+    Journal Entry: Today was a bit overwhelming. I had a lot of meetings and didn't get as much done on my main project as I hoped. Feeling a little drained now.
+    Suggestions:
+    - Perhaps take 15 minutes for a quick walk or some stretching to clear your head and recharge.
+    - Before tomorrow, could you identify one or two key tasks for your main project to focus on first? This might help you feel more accomplished.
+    - Remember to acknowledge what you *did* manage today, even with many meetings. It's okay for some days to be less project-focused.
+    --- Example End ---
+
+    Here's an example of how to respond to an entry corresponding to the emotion "joy":
+    --- Example Start ---
+    Journal Entry: I had such a wonderful day! Spent the afternoon hiking with friends, and the weather was perfect. We even saw a deer. Feeling so refreshed and grateful.
+    Suggestions:
+    - That sounds amazing! Maybe you could plan another hike soon to keep the good vibes going?
+    - Consider sharing a photo from your hike or telling another friend about your adventure to spread the joy.
+    - Take a moment to jot down one specific thing about the hike that made you feel most refreshed – it's a great memory to hold onto.
+    --- Example End ---
+
+    Here's an example of how to respond to an entry corresponding to the emotion "anger":
+    --- Example Start ---
+    Journal Entry: I'm so furious right now! My coworker completely threw me under the bus in the team meeting, taking credit for my work and blaming me for their mistake. I feel so disrespected and unappreciated.
+    Suggestions:
+    - It's completely understandable to feel furious and disrespected. Allow yourself to feel that anger without judgment for a bit.
+    - When you feel a bit calmer, consider writing down the specific points you want to address with your coworker or manager, focusing on the facts and how it impacted you.
+    - Is there a quick activity that usually helps you release frustration, like listening to loud music, going for a brisk walk (if possible), or scribbling on a piece of paper?
+    --- Example End ---
+
+    Do not output "Suggestions:" before the three suggestions. Simply output the three suggestions themselves.
+    Now, here is the user's actual journal entry:"#;
+
+    prompt_parts.push(initial_prompt_block.to_string());
+
     if let Some(title_str) = entry_title.as_ref().filter(|t| !t.trim().is_empty()) {
-        prompt_parts.push(format!("Title: {}", title_str.trim())); // format! returns String
+        prompt_parts.push(format!("Title: {}", title_str.trim()));
     }
 
-    // Used .as_ref() before .filter() to avoid moving entry_content
     if let Some(content_str) = entry_content.as_ref().filter(|c| !c.trim().is_empty()) {
-        let max_content_chars = 500;
+        let max_content_chars = 700;
         let current_content_trimmed = content_str.trim();
         let content_to_use = if current_content_trimmed.chars().count() > max_content_chars {
             current_content_trimmed.chars().take(max_content_chars).collect::<String>() + "..."
-        } 
+        }
         else {
-            current_content_trimmed.to_string() // Ensure this is a String if not already
+            current_content_trimmed.to_string()
         };
-        prompt_parts.push(format!("Content: {}", content_to_use)); // format! returns String
-    } 
+        prompt_parts.push(format!("Content: {}", content_to_use));
+    }
     else {
         prompt_parts.push("Content: (No specific content provided for this entry)".to_string());
     }
-    
-    match suggestion_type.as_deref() {
-        Some("reflective_question") => {
-            prompt_parts.push("\nBased on this entry, suggest a reflective question for the user.".to_string());
-        }
-        Some("positive_affirmation") => {
-            prompt_parts.push("\nBased on this entry, generate a positive affirmation.".to_string());
-        }
-        Some("actionable_step") => {
-            prompt_parts.push("\nBased on this entry, suggest a small actionable step the user could take.".to_string());
-        }
-        _ => {
-            prompt_parts.push("\nProvide a helpful and insightful suggestion related to this journal entry.".to_string());
-        }
-    }
-    prompt_parts.push("Suggestion:".to_string());
 
-    // .join() works on Vec<String> by taking references to the Strings.
+    prompt_parts.push("\nSuggestion:".to_string());
     let final_prompt = prompt_parts.join("\n");
 
-    // Now entry_content and entry_title can be checked with .is_none() as they were not moved.
-    if final_prompt.trim().len() < 50 && entry_content.is_none() && entry_title.is_none() {
-        return Err("The context provided for suggestion is too minimal. Please provide more details from the journal entry.".to_string());
+    if entry_content.as_deref().unwrap_or("").trim().is_empty() && entry_title.as_deref().unwrap_or("").trim().is_empty() {
+        return Err("Cannot generate suggestion: Journal entry title and content are both empty.".to_string());
     }
     
-    log::info!("[CMD generate_suggestion_cmd] Constructed prompt: {}", final_prompt);
+    log::info!("[CMD generate_suggestion_cmd] Final prompt for Gemini API (first 200 chars): {}", final_prompt.chars().take(200).collect::<String>());
 
-    let model_wrapper_arc = &suggestion_model_state.inner().0;
-    let suggestion_model_in_wrapper = &model_wrapper_arc.0;
-    
-    match suggestion_model_in_wrapper.generate(&final_prompt) {
+    match generate_suggestion_via_api(&final_prompt).await {
         Ok(suggestion) => {
             if suggestion.trim().is_empty() {
                 Err("The AI generated an empty suggestion. Try rephrasing or adding more detail to your entry.".to_string())
-            }
-            else {
+            } else {
                 Ok(suggestion)
             }
         }
         Err(e) => {
-            eprintln!("[CMD generate_suggestion_cmd] Error generating suggestion: {}", e);
+            log::error!("[CMD generate_suggestion_cmd] Error generating suggestion via API: {}", e);
             Err(format!("Failed to generate suggestion: {}", e))
         }
     }
+}
+
+fn get_main_content_from_full_content_rs(full_content: &str) -> String {
+    let brain_emotion_tag_marker = "\n\n🧠 Emotion:";
+    let clean_emotion_tag_replacement = "\n\nEmotion:";
+    let suggestion_tag_marker = "\n\n💡 Suggestion:";
+
+    let end_of_relevant_content = full_content.find(suggestion_tag_marker)
+        .unwrap_or(full_content.len());
+
+    let relevant_content_slice = &full_content[0..end_of_relevant_content];
+    let modified_content = relevant_content_slice.replace(brain_emotion_tag_marker, clean_emotion_tag_replacement);
+    modified_content.trim().to_string()
+}
+
+#[derive(Serialize, Deserialize)]
+struct ChatCompletionResponse {
+    assistant_response: String,
+    session_id: String,
+}
+
+#[command]
+async fn chat_with_moodjourney_cmd(
+    user_message: String,
+    session_id_option: Option<String>,
+) -> Result<ChatCompletionResponse, String> {
+    log::info!("[CMD chat_with_moodjourney_cmd] User: '{}', Session: {:?}", user_message, session_id_option);
+
+    let current_session_id = match session_id_option {
+        Some(id) => id,
+        None => db::create_new_chat_session().map_err(|e| {
+            log::error!("Failed to create new chat session: {}", e);
+            e.to_string()
+        })?,
+    };
+
+    db::save_chat_message(&current_session_id, "user", &user_message).map_err(|e| {
+        log::error!("Failed to save user message for session {}: {}", current_session_id, e);
+        e.to_string()
+    })?;
+
+    let all_messages_for_session_from_db = db::get_messages_for_session(&current_session_id)
+        .map_err(|e| format!("Failed to retrieve messages for session {}: {}", current_session_id, e))?;
+
+    let mut api_request_contents: Vec<serde_json::Value> = Vec::new();
+
+    for (index, db_msg) in all_messages_for_session_from_db.iter().enumerate() {
+        let mut current_turn_text_for_api = db_msg.content.clone();
+        if index == 0 && db_msg.sender == "user" {
+            let mut system_and_first_user_message_parts: Vec<String> = Vec::new();
+            let current_date_str = Local::now().format("%A, %B %d, %Y").to_string();
+
+            let initial_prompt_block = format!(
+                r#"
+                You are a helpful journaling assistant called "MoodJourney". The user wants to chat with you.
+                The current date is {}.
+                You have access to the user's past journal entries for context. Refer to them when relevant to provide
+                insightful and understanding responses. Be conversational and concise. Do not explicitly state 'Based on your entry
+                from (Month) (Day), (Year)...' unless it feels natural and helpful.
+                The following is the start of our conversation:"#,
+                current_date_str
+            );
+
+            system_and_first_user_message_parts.push(initial_prompt_block);
+
+            let all_journal_entries = db::get_entries().unwrap_or_default();
+            if !all_journal_entries.is_empty() {
+                system_and_first_user_message_parts.push("\n\nHere are the user's past journal entries as general context:\n---\n".to_string());
+                for entry in all_journal_entries.iter() {
+                    let main_content = get_main_content_from_full_content_rs(&entry.content.clone().unwrap_or_default());
+                    system_and_first_user_message_parts.push(format!("Date: {}\nContent: {}\n---\n",
+                        entry.date,
+                        main_content
+                    ));
+                }
+                system_and_first_user_message_parts.push("End of past journal entries.\n".to_string());
+            }
+
+            system_and_first_user_message_parts.push(format!("\nUser: {}", db_msg.content));
+            current_turn_text_for_api = system_and_first_user_message_parts.join("\n");
+        }
+        api_request_contents.push(serde_json::json!({
+            "role": if db_msg.sender == "user" { "user" } else { "model" },
+            "parts": [{"text": current_turn_text_for_api}]
+        }));
+    }
+
+    let last_content_for_log = api_request_contents.last()
+        .and_then(|c| c.get("parts").and_then(|p| p.get(0)).and_then(|t| t.get("text")).and_then(|s| s.as_str()))
+        .map(|s| s.chars().take(300).collect::<String>())
+        .unwrap_or_else(|| "N/A".to_string());
+    log::info!("[CMD chat_with_moodjourney_cmd] Last turn content being sent to API (first 300 chars): {}", last_content_for_log);
+
+    match suggestion::generate_chat_response_via_api(&api_request_contents).await {
+        Ok(response_text) => {
+            if response_text.trim().is_empty() {
+                Err("The AI generated an empty response.".to_string())
+            }
+            else {
+                db::save_chat_message(&current_session_id, "assistant", &response_text).map_err(|e| {
+                    log::error!("Failed to save assistant message for session {}: {}", current_session_id, e);
+                    e.to_string()
+                })?;
+                Ok(ChatCompletionResponse {
+                    assistant_response: response_text,
+                    session_id: current_session_id,
+                })
+            }
+        }
+        Err(e) => {
+            log::error!("[CMD chat_with_moodjourney_cmd] Error generating chat response: {}", e);
+            Err(format!("Failed to get response from MoodJourney: {}", e))
+        }
+    }
+}
+
+#[command]
+async fn load_chat_sessions() -> Result<Vec<db::ChatSession>, String> {
+    db::get_all_chat_sessions().map_err(|e| e.to_string())
+}
+
+#[command]
+async fn load_messages_for_session_cmd(session_id: String) -> Result<Vec<db::ChatMessage>, String> {
+    db::get_messages_for_session(&session_id).map_err(|e| e.to_string())
 }
 
 fn main() {
@@ -253,15 +377,6 @@ fn main() {
                 eprintln!("CRITICAL: Base 'models' directory for ML models does not exist at {:?}.", resource_path);
                 panic!("Base 'models' directory not found. Ensure models are bundled correctly.");
             }
-        
-            let suggestion_model_dir_name = "suggestion";
-            let suggestion_model_dir = resource_path.join(suggestion_model_dir_name);
-            println!("Loading suggestion model from: {:?}", suggestion_model_dir);
-            let suggestion_model_instance = SuggestionModel::new(suggestion_model_dir)
-                .expect("CRITICAL: Failed to initialize SuggestionModel.");
-            let safe_suggestion_model_wrapper = SafeSuggestionModelWrapper(suggestion_model_instance);
-            app.manage(AppSuggestionModel(Arc::new(safe_suggestion_model_wrapper)));
-            println!("SuggestionModel (GPT-2) managed.");
 
             let emotion_model_dir_name = "emotion";
             let emotion_model_base_path = resource_path.join(emotion_model_dir_name);
@@ -282,7 +397,8 @@ fn main() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![create_entry, read_entries, get_entry, update_entry, classify_emotion, delete_entry, perform_dictation_cmd, upload_image_file, generate_suggestion_cmd])
+        .invoke_handler(tauri::generate_handler![create_entry, read_entries, get_entry, update_entry, classify_emotion, delete_entry, perform_dictation_cmd,
+        upload_image_file, generate_suggestion_cmd, chat_with_moodjourney_cmd, load_chat_sessions, load_messages_for_session_cmd])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
