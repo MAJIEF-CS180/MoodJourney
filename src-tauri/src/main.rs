@@ -3,6 +3,7 @@
 mod db;
 mod emotion;
 mod dictation;
+mod password;
 
 use std::fs;
 use std::io::Write; 
@@ -12,8 +13,25 @@ use uuid::Uuid;
 use db::{
     init_db, create_entry_with_now, get_entries, get_entry_by_date, update_entry_by_date, delete_entry_by_date, Entry,
 };
+use password::{set_password, check_password, is_locked};
 use emotion::classify_emotion;
 use tauri::{command, AppHandle, Manager};
+
+
+#[tauri::command]
+fn is_locked() -> bool {
+    password::is_locked()
+}
+
+#[tauri::command]
+fn check_password_attempt(password: String) -> bool {
+    password::check_password(&password)
+}
+
+#[tauri::command]
+fn set_new_password(password: String) {
+    password::set_password(&password);
+}
 
 // automatically creates entry with current local date
 // content and password are optional
@@ -113,6 +131,7 @@ async fn upload_image_file(app_handle: AppHandle, file_data_base64: String, orig
     }
 
     let image_bytes = base64::decode(&file_data_base64).map_err(|e| format!("Invalid base64 image data: {}", e))?;
+    
 
     let extension = PathBuf::from(&original_file_name)
         .extension()
@@ -158,7 +177,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![create_entry, read_entries, get_entry, update_entry, classify_emotion, delete_entry, perform_dictation, upload_image_file])
+        .invoke_handler(tauri::generate_handler![is_locked, check_password_attempt, set_new_password, create_entry, read_entries, get_entry, update_entry, classify_emotion, delete_entry, perform_dictation, upload_image_file])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
