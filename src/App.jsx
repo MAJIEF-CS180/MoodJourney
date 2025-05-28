@@ -152,8 +152,8 @@ const getEmotionColor = (emotion, theme) => {
 
 const scrollbarStyles = (theme) => ({
     overflowY: 'auto',
-    pr: 0.5, 
-    mr: -0.5, 
+    pr: 0.5,
+    mr: -0.5,
     '&::-webkit-scrollbar': { width: '8px' },
     '&::-webkit-scrollbar-track': { background: 'transparent' },
     '&::-webkit-scrollbar-thumb': {
@@ -172,7 +172,7 @@ function CombinedSettingsPage({ currentThemeMode, onThemeModeChange, onBack }) {
             </Box>
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, width: '100%', flexGrow: 1, overflow: 'hidden' }}>
                 <Paper sx={{ p: 1, flex: { xs: '1 1 auto', md: '2 1 0%' }, minWidth: 0, borderRadius: '16px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                    <Box sx={{...scrollbarStyles(theme), height: '100%'}}> 
+                    <Box sx={{...scrollbarStyles(theme), height: '100%'}}>
                         <Box sx={{ p: theme.spacing(1.5), pr: theme.spacing(1), display: 'flex', flexDirection: 'column', height: '100%' }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', width: '100%', mb: 2, flexShrink: 0 }}>
                                 <Typography variant="body1" id="theme-select-label" sx={{ fontSize: '1.125rem', mr: 2, pb: '0px' }}>Theme</Typography>
@@ -256,39 +256,53 @@ function InsightsPage({ entries, theme, onBack, handleEntrySelect }) {
     const getEntryPreview = (content) => {
         const main = getMainContent(content);
         const lines = main.split('\n');
-        return lines.slice(0, 5).join('\n') + (lines.length > 5 ? '...' : ''); 
+        return lines.slice(0, 5).join('\n') + (lines.length > 5 ? '...' : '');
     };
-    
+
     const EmotionSummaryList = () => {
         const orderedEmotionKeys = ['angry', 'disgust', 'fear', 'joy', 'neutral', 'sadness', 'surprise'];
-        let hasDisplayedEmotions = false;
+
+        // Determine if there are any emotions with counts > 0 (including unknown)
+        // This will be used for the "No categorized emotions" message.
+        const hasAnyCountGreaterThanZero =
+            orderedEmotionKeys.some(key => emotionCounts[key] > 0) ||
+            (emotionCounts.unknown && emotionCounts.unknown > 0);
+
         return (
             <Box sx={{ p: theme.spacing(1.5) }}>
                 {orderedEmotionKeys.map((emotionKey) => {
-                    const count = emotionCounts[emotionKey];
-                    if (count > 0) {
-                        hasDisplayedEmotions = true;
-                        let displayName = emotionKey.charAt(0).toUpperCase() + emotionKey.slice(1);
-                        if (emotionKey === 'angry') displayName = 'Anger';
-                        return (
-                            <Box key={emotionKey} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, p:1, borderRadius: '8px', background: alpha(getEmotionColor(emotionKey, theme), 0.1) }}>
-                                <Typography variant="body1" sx={{ textTransform: 'capitalize', color: getEmotionColor(emotionKey, theme) }}>{displayName}</Typography>
-                                <Typography variant="body1" sx={{ fontWeight: 'bold', color: getEmotionColor(emotionKey, theme) }}>{count}</Typography>
-                            </Box>
-                        );
-                    } return null;
-                })}
-                {emotionCounts.unknown > 0 && (() => {
-                    hasDisplayedEmotions = true;
+                    const count = emotionCounts[emotionKey] || 0; // Get count, default to 0
+                    let displayName = emotionKey.charAt(0).toUpperCase() + emotionKey.slice(1);
+                    if (emotionKey === 'angry') displayName = 'Anger';
+
+                    // Always render this block, showing count (which can be 0)
                     return (
-                        <Box key="unknown" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, p:1, borderRadius: '8px', background: alpha(getEmotionColor("unknown", theme), 0.1) }}>
-                            <Typography variant="body1" sx={{ textTransform: 'capitalize', color: getEmotionColor("unknown", theme) }}>Unknown</Typography>
-                            <Typography variant="body1" sx={{ fontWeight: 'bold', color: getEmotionColor("unknown", theme) }}>{emotionCounts.unknown}</Typography>
+                        <Box key={emotionKey} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, p:1, borderRadius: '8px', background: alpha(getEmotionColor(emotionKey, theme), 0.1) }}>
+                            <Typography variant="body1" sx={{ textTransform: 'capitalize', color: getEmotionColor(emotionKey, theme) }}>{displayName}</Typography>
+                            <Typography variant="body1" sx={{ fontWeight: 'bold', color: getEmotionColor(emotionKey, theme) }}>{count}</Typography>
                         </Box>
                     );
-                })()}
-                {entries.length > 0 && !hasDisplayedEmotions && <Typography sx={{ textAlign: 'center', mt: 1 }} color="text.secondary">No categorized emotions.</Typography>}
-                {entries.length === 0 && <Typography sx={{ textAlign: 'center', mt: 1 }} color="text.secondary">No data for summary.</Typography>}
+                })}
+
+                {/* Render unknown emotions if count > 0 */}
+                {emotionCounts.unknown > 0 && (
+                    <Box key="unknown" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, p:1, borderRadius: '8px', background: alpha(getEmotionColor("unknown", theme), 0.1) }}>
+                        <Typography variant="body1" sx={{ textTransform: 'capitalize', color: getEmotionColor("unknown", theme) }}>Unknown</Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 'bold', color: getEmotionColor("unknown", theme) }}>{emotionCounts.unknown}</Typography>
+                    </Box>
+                )}
+
+                {/* Conditional messages */}
+                {entries.length > 0 && !hasAnyCountGreaterThanZero && (
+                    <Typography sx={{ textAlign: 'center', mt: 1 }} color="text.secondary">
+                        No categorized emotions.
+                    </Typography>
+                )}
+                {entries.length === 0 && (
+                    <Typography sx={{ textAlign: 'center', mt: 1 }} color="text.secondary">
+                        No data for summary.
+                    </Typography>
+                )}
             </Box>
         );
     };
@@ -317,15 +331,15 @@ function InsightsPage({ entries, theme, onBack, handleEntrySelect }) {
                         transition: 'transform 0.1s ease-out, box-shadow 0.1s ease-out',
                         '&:hover': entryForDay ? { transform: 'scale(1.05)', boxShadow: theme.shadows[4] } : {},
                         display: 'flex',
-                        alignItems: 'flex-start', 
-                        justifyContent: 'flex-start', 
-                        p: 0.5, 
-                        position: 'relative', 
+                        alignItems: 'flex-start',
+                        justifyContent: 'flex-start',
+                        p: 0.5,
+                        position: 'relative',
                         opacity: entryForDay ? 1 : 0.7,
                     }}
                 >
-                    <Typography variant="caption" sx={{ 
-                        fontSize: '0.6rem', 
+                    <Typography variant="caption" sx={{
+                        fontSize: '0.6rem',
                         color: entryForDay ? alpha(theme.palette.getContrastText(squareColor), 0.8) : theme.palette.text.secondary,
                         lineHeight: 1,
                      }}>
@@ -335,7 +349,7 @@ function InsightsPage({ entries, theme, onBack, handleEntrySelect }) {
             </MuiTooltip>
         );
     };
-    
+
     const renderDayHeaders = () => (
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: theme.spacing(0.75), p: `${theme.spacing(0.25)} ${theme.spacing(0.75)} 0 ${theme.spacing(0.75)}` , mb: 0.5}}>
             {dayAbbreviations.map(day => (
@@ -367,15 +381,15 @@ function InsightsPage({ entries, theme, onBack, handleEntrySelect }) {
                                         const cardEmotionColor = rawEmotion ? getEmotionColor(rawEmotion, theme) : theme.palette.text.disabled;
                                         let cardDisplayText = rawEmotion;
                                         if (rawEmotion?.toLowerCase() === 'anger' || rawEmotion?.toLowerCase() === 'angry') cardDisplayText = 'Anger';
-                                        
+
                                         return (
                                             <Card
                                                 key={entry.date}
                                                 sx={{
-                                                    width: '100%', 
+                                                    width: '100%',
                                                     mb: 2,
-                                                    display: 'flex', 
-                                                    flexDirection: 'column', 
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
                                                     borderLeft: `5px solid ${cardEmotionColor}`,
                                                     borderRadius: '8px',
                                                     '&:last-child': { mb: 0 },
@@ -395,16 +409,16 @@ function InsightsPage({ entries, theme, onBack, handleEntrySelect }) {
                                                                 <Box sx={{
                                                                     bgcolor: cardEmotionColor,
                                                                     color: theme.palette.getContrastText(cardEmotionColor),
-                                                                    py: theme.spacing(0.75), 
-                                                                    px: theme.spacing(2),   
-                                                                    borderRadius: '8px', 
+                                                                    py: theme.spacing(0.75),
+                                                                    px: theme.spacing(2),
+                                                                    borderRadius: '8px',
                                                                     display: 'inline-flex',
                                                                     alignItems: 'center',
                                                                     justifyContent: 'center',
-                                                                    minWidth: '80px', 
+                                                                    minWidth: '80px',
                                                                 }}>
                                                                     <Typography
-                                                                        variant="body2" 
+                                                                        variant="body2"
                                                                         sx={{ fontWeight: 'bold', textTransform: 'capitalize', lineHeight: '1.3' }}
                                                                     >
                                                                         {cardDisplayText}
@@ -417,13 +431,13 @@ function InsightsPage({ entries, theme, onBack, handleEntrySelect }) {
                                                             variant="body1"
                                                             sx={{
                                                                 fontSize: theme.typography.pxToRem(17),
-                                                                lineHeight: 1.6, 
+                                                                lineHeight: 1.6,
                                                                 display: '-webkit-box',
-                                                                WebkitLineClamp: 5, 
+                                                                WebkitLineClamp: 5,
                                                                 WebkitBoxOrient: 'vertical',
                                                                 overflow: 'hidden',
                                                                 textOverflow: 'ellipsis',
-                                                                minHeight: '8em', 
+                                                                minHeight: '8em',
                                                             }}
                                                         >
                                                             {getEntryPreview(entry.content)}
@@ -436,20 +450,20 @@ function InsightsPage({ entries, theme, onBack, handleEntrySelect }) {
                                 </Box>
                             </Box>
                         ) : <Typography sx={{ textAlign: 'center', mt: 3 }}>No journal entries to display.</Typography>
-                    ) : ( 
+                    ) : (
                         <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
-                            <Box sx={{ 
-                                p: 1, 
-                                display: 'flex', 
-                                justifyContent: 'space-between', 
-                                alignItems: 'center', 
-                                flexWrap: 'wrap', 
-                                borderBottom: `1px solid ${theme.palette.divider}`, 
-                                mb: 1, 
-                                flexShrink: 0 
+                            <Box sx={{
+                                p: 1,
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                flexWrap: 'wrap',
+                                borderBottom: `1px solid ${theme.palette.divider}`,
+                                mb: 1,
+                                flexShrink: 0
                             }}>
                                 <Typography variant="h6" component="div" sx={{ fontWeight: 'bold', color: theme.palette.text.primary }}>
-                                    {calendarGranularity === "month" 
+                                    {calendarGranularity === "month"
                                         ? `${monthNames[currentDisplayMonth]} ${currentDisplayYear}`
                                         : `${currentDisplayYear}`
                                     }
@@ -526,27 +540,27 @@ function InsightsPage({ entries, theme, onBack, handleEntrySelect }) {
                         </Box>
                     )}
                 </Paper>
-                <Paper sx={{ 
-                    p: 1, 
-                    flex: { xs: '1 1 auto', md: '1 1 0%' }, 
-                    minWidth: 0, 
-                    borderRadius: '16px', 
-                    display: 'flex', 
-                    flexDirection: 'column', 
+                <Paper sx={{
+                    p: 1,
+                    flex: { xs: '1 1 auto', md: '1 1 0%' },
+                    minWidth: 0,
+                    borderRadius: '16px',
+                    display: 'flex',
+                    flexDirection: 'column',
                     borderLeft: { md: `1px solid ${theme.palette.divider}` },
                 }}>
-                    <Box sx={{flexShrink: 0, ...scrollbarStyles(theme) }}> 
+                    <Box sx={{flexShrink: 0, ...scrollbarStyles(theme) }}>
                         <EmotionSummaryList />
                     </Box>
                     <Divider sx={{ my: 1, flexShrink: 0 }} />
-                    <Box sx={{ 
-                        flexGrow: 1, 
-                        display: 'flex',      
-                        flexDirection: 'column', 
-                        justifyContent: 'flex-end', 
-                        pt: theme.spacing(1.5), 
-                        pr: theme.spacing(1.5), 
-                        pb: theme.spacing(1.5), 
+                    <Box sx={{
+                        flexGrow: 1,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'flex-end',
+                        pt: theme.spacing(1.5),
+                        pr: theme.spacing(1.5),
+                        pb: theme.spacing(1.5),
                         pl: theme.spacing(1),   // Adjusted Left padding for centering
                         ...scrollbarStyles(theme),
                     }}>
@@ -568,10 +582,10 @@ function InsightsPage({ entries, theme, onBack, handleEntrySelect }) {
                                     let displayText = rawEmotion;
                                     if (rawEmotion?.toLowerCase() === 'anger' || rawEmotion?.toLowerCase() === 'angry') displayText = 'Anger';
                                     return displayText ? (
-                                        <Box sx={{ 
-                                            bgcolor: emotionColor, 
+                                        <Box sx={{
+                                            bgcolor: emotionColor,
                                             color: theme.palette.getContrastText(emotionColor),
-                                            py: 0.5, px: 1.5, borderRadius: '8px', display: 'inline-block', mb: 2 
+                                            py: 0.5, px: 1.5, borderRadius: '8px', display: 'inline-block', mb: 2
                                         }}>
                                             <Typography variant="body1" sx={{ fontWeight: 'bold', textTransform: 'capitalize' }}>
                                                 {displayText}
@@ -579,19 +593,19 @@ function InsightsPage({ entries, theme, onBack, handleEntrySelect }) {
                                         </Box>
                                     ) : null;
                                 })()}
-                                <Typography 
-                                    sx={{ 
-                                        fontSize: theme.typography.pxToRem(17), 
+                                <Typography
+                                    sx={{
+                                        fontSize: theme.typography.pxToRem(17),
                                         lineHeight: 1.6,
-                                        whiteSpace: 'pre-wrap', 
-                                        wordBreak: 'break-word', 
-                                        mb: 2, 
+                                        whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-word',
+                                        mb: 2,
                                         display: '-webkit-box',
-                                        WebkitLineClamp: 5, 
+                                        WebkitLineClamp: 5,
                                         WebkitBoxOrient: 'vertical',
                                         overflow: 'hidden',
                                         textOverflow: 'ellipsis',
-                                        minHeight: '8em', 
+                                        minHeight: '8em',
                                     }}
                                 >
                                     {getMainContent(selectedInsightEntry.content)}
@@ -603,7 +617,7 @@ function InsightsPage({ entries, theme, onBack, handleEntrySelect }) {
                                         startIcon={<ArticleIcon />}
                                         onClick={() => {
                                             if (handleEntrySelect) handleEntrySelect(selectedInsightEntry);
-                                            setSelectedInsightEntry(null); 
+                                            setSelectedInsightEntry(null);
                                         }}
                                     >
                                         View Entry
@@ -677,19 +691,33 @@ function AssistantPage({ theme, setStatus, onBack }) {
         setChatSessionToDeleteId(null);
     };
 
-    // Placeholder for actual delete logic
+    // Actual delete logic
     const handleConfirmDeleteChat = async () => {
         if (!chatSessionToDeleteId) {
             setStatus({ message: "Cannot delete: No chat session selected.", severity: "error" });
             handleCloseDeleteChatConfirm();
             return;
         }
-        // Backend delete logic will go here in the future
-        console.log(`Attempting to delete chat session: ${chatSessionToDeleteId} (Backend not implemented)`);
-        setStatus({ message: `Delete for chat ${chatSessionToDeleteId} initiated (simulated).`, severity: "info" });
-        
-        // For now, just close the dialog. Later, you might want to refresh the chat list.
-        handleCloseDeleteChatConfirm();
+
+        const sessionWasCurrentlySelected = chatSessionToDeleteId === currentSessionId;
+
+        try {
+            await invoke("delete_chat_session_cmd", { sessionId: chatSessionToDeleteId });
+            setStatus({ message: "Chat session deleted successfully.", severity: "success" });
+
+            // After successful deletion, fetch updated sessions.
+            // The `selectLatest` argument in fetchChatSessions will handle:
+            // - If the deleted session was active, it tries to select the new latest session.
+            // - If no sessions are left, it sets currentSessionId to null (new chat state).
+            // - If a different session was deleted, it just refreshes the list.
+            await fetchChatSessions(sessionWasCurrentlySelected);
+
+        } catch (error) {
+            console.error("Failed to delete chat session:", error);
+            setStatus({ message: `Failed to delete chat: ${error.message || String(error)}`, severity: "error" });
+        } finally {
+            handleCloseDeleteChatConfirm();
+        }
     };
 
 
@@ -704,36 +732,36 @@ function AssistantPage({ theme, setStatus, onBack }) {
         try {
             const sessions = await invoke("load_chat_sessions");
             setChatSessions(sessions || []);
-            if (selectLatest) { 
+            if (selectLatest) {
                 if (sessions && sessions.length > 0) {
-                    setCurrentSessionId(sessions[0].id); 
+                    setCurrentSessionId(sessions[0].id);
                 } else {
-                    setCurrentSessionId(null); 
+                    setCurrentSessionId(null);
                 }
             }
         } catch (error) {
             console.error("Failed to load chat sessions:", error);
             setStatus({ message: `Failed to load chat history: ${error.message || String(error)}`, severity: "error" });
-            setChatSessions([]); 
+            setChatSessions([]);
         } finally {
             setIsLoadingSessions(false);
         }
     };
 
     const fetchMessagesForSession = async (sessionId) => {
-        if (!sessionId) { 
+        if (!sessionId) {
             setMessages([{ id: `new-chat-${Date.now()}`, sender: 'assistant', text: "Starting a new chat. What's on your mind?" }]);
             setIsLoadingChatMessages(false);
-            setUserInput(''); 
+            setUserInput('');
             return;
         }
         setIsLoadingChatMessages(true);
         try {
             const loadedMessages = await invoke("load_messages_for_session_cmd", { sessionId });
             const formatted = loadedMessages.map(msg => ({
-                id: msg.id, 
+                id: msg.id,
                 sender: msg.sender,
-                text: msg.content, 
+                text: msg.content,
                 timestamp: msg.timestamp,
             }));
             setMessages(formatted.length > 0 ? formatted : [{id: `empty-${sessionId}-${Date.now()}`, sender: 'assistant', text: "This chat is empty. Send a message to start!"}]);
@@ -745,11 +773,11 @@ function AssistantPage({ theme, setStatus, onBack }) {
             setIsLoadingChatMessages(false);
         }
     };
-    
+
     useEffect(() => {
-        fetchChatSessions(false); 
-        setCurrentSessionId(null); 
-    }, []); 
+        fetchChatSessions(false);
+        setCurrentSessionId(null);
+    }, []);
 
     useEffect(() => {
         fetchMessagesForSession(currentSessionId);
@@ -760,7 +788,7 @@ function AssistantPage({ theme, setStatus, onBack }) {
         const trimmedInput = userInput.trim();
         if (!trimmedInput) return;
 
-        const sessionIdAtTimeOfSend = currentSessionId; 
+        const sessionIdAtTimeOfSend = currentSessionId;
 
         const optimisticUserMessage = { id: `temp-user-${Date.now()}`, sender: 'user', text: trimmedInput, timestamp: new Date().toISOString() };
         setMessages(prevMessages => {
@@ -769,33 +797,33 @@ function AssistantPage({ theme, setStatus, onBack }) {
             }
             return [...prevMessages, optimisticUserMessage];
         });
-        
+
         setUserInput('');
-        setIsLoading(true); 
+        setIsLoading(true);
         setStatus({ message: "Assistant is thinking...", severity: "info" });
 
         try {
-            const response = await invoke("chat_with_moodjourney_cmd", { 
+            const response = await invoke("chat_with_moodjourney_cmd", {
                 userMessage: trimmedInput,
-                sessionIdOption: sessionIdAtTimeOfSend 
+                sessionIdOption: sessionIdAtTimeOfSend
             });
 
             if (sessionIdAtTimeOfSend !== currentSessionId) {
                 console.log("Session changed while message was in flight. UI update for old session's response is skipped.");
-                return; 
+                return;
             }
-            
-            const newAssistantMessage = { 
-                id: `assistant-${response.session_id || 'new'}-${Date.now()}-${Math.random().toString(36).substring(7)}`, 
-                sender: 'assistant', 
+
+            const newAssistantMessage = {
+                id: `assistant-${response.session_id || 'new'}-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+                sender: 'assistant',
                 text: response.assistant_response,
-                timestamp: new Date().toISOString() 
+                timestamp: new Date().toISOString()
             };
-            
-            if (!sessionIdAtTimeOfSend) { 
+
+            if (!sessionIdAtTimeOfSend) {
                 setCurrentSessionId(response.session_id);
-                await fetchChatSessions(); 
-            } else { 
+                await fetchChatSessions();
+            } else {
                 setMessages(prevMessages => [...prevMessages, newAssistantMessage]);
                 await fetchChatSessions();
             }
@@ -806,51 +834,51 @@ function AssistantPage({ theme, setStatus, onBack }) {
 
             if (sessionIdAtTimeOfSend !== currentSessionId) {
                 console.log("Session changed while message (which errored) was in flight. Error UI update for old session is skipped.");
-                return; 
+                return;
             }
-            
+
             setMessages(prevMessages => prevMessages.filter(msg => msg.id !== optimisticUserMessage.id));
-            
+
             const errorMessageText = `Sorry, I encountered an error. Please try again.`;
             const errorMessage = { id: `error-msg-${Date.now()}`, sender: 'assistant', text: errorMessageText, timestamp: new Date().toISOString() };
-            setMessages(prevMessages => [...prevMessages, errorMessage]); 
+            setMessages(prevMessages => [...prevMessages, errorMessage]);
             setStatus({ message: `Error getting response: ${error.message || String(error)}`, severity: "error" });
         } finally {
             setIsLoading(false);
         }
     };
-    
+
     const handleNewChatClick = () => {
-        setCurrentSessionId(null); 
+        setCurrentSessionId(null);
     };
 
     const handleSessionSelect = (sessionId) => {
-        if (sessionId === currentSessionId) return; 
+        if (sessionId === currentSessionId) return;
         setCurrentSessionId(sessionId);
     };
 
     return (
-        <> 
+        <>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexShrink: 0 }}>
                 <Button startIcon={<ArrowBackIcon />} onClick={onBack} variant="outlined">Back to Journal</Button>
                 <Button startIcon={<AddIcon />} onClick={handleNewChatClick} variant="outlined">New Chat</Button>
             </Box>
-            <Box sx={{ 
-                display: 'flex', 
-                flexDirection: { xs: 'column', md: 'row' }, 
-                gap: 2, 
-                width: '100%', 
-                flexGrow: 1, 
-                overflow: 'hidden' 
+            <Box sx={{
+                display: 'flex',
+                flexDirection: { xs: 'column', md: 'row' },
+                gap: 2,
+                width: '100%',
+                flexGrow: 1,
+                overflow: 'hidden'
             }}>
                 {/* Chat Interface Container (2/3 box) - Now a Paper component */}
-                <Paper sx={{ 
+                <Paper sx={{
                     p: 1, // Outer padding for the Paper itself
-                    flex: { xs: '1 1 auto', md: '2 1 0%' }, 
-                    minWidth: 0, 
-                    borderRadius: '16px', 
-                    display: 'flex', 
-                    flexDirection: 'column', 
+                    flex: { xs: '1 1 auto', md: '2 1 0%' },
+                    minWidth: 0,
+                    borderRadius: '16px',
+                    display: 'flex',
+                    flexDirection: 'column',
                     overflow: 'hidden', // Important for scrollbar behavior of children
                     position: 'relative' // For the loading overlay
                 }}>
@@ -863,7 +891,7 @@ function AssistantPage({ theme, setStatus, onBack }) {
                     <Box sx={{ flexGrow: 1, ...scrollbarStyles(theme), p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
                         {messages.map((msg) => (
                             <Box
-                                key={msg.id} 
+                                key={msg.id}
                                 sx={{
                                     alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
                                     maxWidth: '75%',
@@ -883,7 +911,7 @@ function AssistantPage({ theme, setStatus, onBack }) {
                                 </Paper>
                             </Box>
                         ))}
-                        {isLoading && messages.length > 0 && messages[messages.length-1].sender === 'user' && ( 
+                        {isLoading && messages.length > 0 && messages[messages.length-1].sender === 'user' && (
                             <Box sx={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Paper elevation={1} sx={{ p: 1.5, borderRadius: '12px', bgcolor: alpha(theme.palette.secondary.main, 0.2), color: theme.palette.text.primary, border: `1px solid ${theme.palette.secondary.main}` }}>
                                     <CircularProgress size={20} color="inherit" sx={{color: theme.palette.text.primary}} />
@@ -904,7 +932,7 @@ function AssistantPage({ theme, setStatus, onBack }) {
                             onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey && !isLoading) { e.preventDefault(); handleSendMessage(); } }}
                             disabled={isLoading || isLoadingChatMessages}
                             multiline
-                            maxRows={3} 
+                            maxRows={3}
                             sx={{ '& .MuiFilledInput-root': { borderRadius: '8px' } }}
                         />
                         <IconButton color="primary" onClick={handleSendMessage} disabled={isLoading || isLoadingChatMessages || !userInput.trim()}>
@@ -928,9 +956,9 @@ function AssistantPage({ theme, setStatus, onBack }) {
                     ) : (
                         <List sx={{ overflowY: 'auto', flexGrow: 1, ...scrollbarStyles(theme), p:0, '& .MuiListItemButton-root': {pt:0.75, pb:0.75} }}>
                             {chatSessions.map(session => (
-                                <ListItem 
-                                    key={session.id} 
-                                    disablePadding 
+                                <ListItem
+                                    key={session.id}
+                                    disablePadding
                                     sx={{px: 0.5, mb: 0.5}}
                                     secondaryAction={
                                         <IconButton edge="end" aria-label="options" onClick={(event) => handleMenuOpen(event, session.id)}>
@@ -948,9 +976,9 @@ function AssistantPage({ theme, setStatus, onBack }) {
                                         </ListItemIcon>
                                         <ListItemText
                                             primary={session.title || "Chat"}
-                                            primaryTypographyProps={{ 
-                                                noWrap: true, 
-                                                sx: { fontWeight: session.id === currentSessionId ? 'bold' : 'normal', fontSize: '0.9rem', color: session.id === currentSessionId ? theme.palette.primary.main : theme.palette.text.primary } 
+                                            primaryTypographyProps={{
+                                                noWrap: true,
+                                                sx: { fontWeight: session.id === currentSessionId ? 'bold' : 'normal', fontSize: '0.9rem', color: session.id === currentSessionId ? theme.palette.primary.main : theme.palette.text.primary }
                                             }}
                                             secondary={formatChatTimestamp(session.last_modified_at)}
                                             secondaryTypographyProps={{noWrap: true, fontSize: '0.75rem'}}
@@ -1027,7 +1055,7 @@ function App() {
     const [entries, setEntries] = useState([]);
     const [selectedEntry, setSelectedEntry] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [status, setStatus] = useState({ message: "", severity: "info" }); 
+    const [status, setStatus] = useState({ message: "", severity: "info" });
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [hoverOpen, setHoverOpen] = useState(false);
     const [entryText, setEntryText] = useState("");
@@ -1062,7 +1090,7 @@ function App() {
     const muiTheme = useMemo(() => (isDarkModeActive ? darkTheme : lightTheme), [isDarkModeActive]);
     const userName = "Michael";
     const isDrawerVisuallyOpen = drawerOpen || hoverOpen;
-    
+
     const handleCloseStatus = (event, reason) => {
         if (reason === 'clickaway') {
             return;
@@ -1194,7 +1222,7 @@ function App() {
         setDeleteConfirmOpen(false);
         setEntryToDelete(null);
     };
-    
+
     // Actually deletes the entry after confirmation
     const handleConfirmDeleteEntry = async () => {
         if (!entryToDelete || !entryToDelete.date) {
@@ -1210,11 +1238,11 @@ function App() {
                 setIsEditingSelectedEntry(false);
                 setEditedContentText("");
             }
-            await refreshEntriesList(); 
+            await refreshEntriesList();
             setShowAllEntriesInDrawer(false);
             if (selectedEntry?.date === entryToDelete.date) {
                 setSelectedEntry(null);
-                handleNewEntryClick(); 
+                handleNewEntryClick();
             }
             const currentEntries = await invoke("read_entries");
             if (currentEntries.length === 0) {
@@ -1238,12 +1266,12 @@ function App() {
     const handleNewEntryClick = () => { setSelectedEntry(null); setIsEditingSelectedEntry(false); setEditedContentText(""); setEntryText(""); setStatus({ message: "", severity: "info" }); setLastDetectedEmotion(""); setCurrentView('main'); setShowAllEntriesInDrawer(false); };
     const handleSettingsClick = () => { setCurrentView('settings'); setSelectedEntry(null); setIsEditingSelectedEntry(false); setStatus({ message: "", severity: "info" }); setLastDetectedEmotion(""); };
     const handleInsightsClick = () => { setCurrentView('insights'); setSelectedEntry(null); setIsEditingSelectedEntry(false); setStatus({ message: "", severity: "info" }); setLastDetectedEmotion(""); };
-    const handleAssistantClick = () => { 
-        setCurrentView('assistant'); 
-        setSelectedEntry(null); 
-        setIsEditingSelectedEntry(false); 
-        setStatus({ message: "", severity: "info" }); 
-        setLastDetectedEmotion(""); 
+    const handleAssistantClick = () => {
+        setCurrentView('assistant');
+        setSelectedEntry(null);
+        setIsEditingSelectedEntry(false);
+        setStatus({ message: "", severity: "info" });
+        setLastDetectedEmotion("");
     };
     const handleThemeModeChange = (newMode) => setThemeMode(newMode);
     const handleToggleShowEntries = () => setShowAllEntriesInDrawer(prev => !prev);
@@ -1266,20 +1294,20 @@ function App() {
             <Box sx={{ marginTop: 'auto', flexShrink: 0 }}><Divider />
                 <List>
                     {[
-                        { text: 'Assistant', icon: <AutoAwesomeIcon />, handler: handleAssistantClick, view: 'assistant' }, 
+                        { text: 'Assistant', icon: <AutoAwesomeIcon />, handler: handleAssistantClick, view: 'assistant' },
                         { text: 'Insights', icon: <ShowChartIcon />, handler: handleInsightsClick, view: 'insights' },
                         { text: 'Settings', icon: <SettingsIcon />, handler: handleSettingsClick, view: 'settings' }
                     ].map((item) => (
                         <ListItem key={item.text} disablePadding>
-                            <ListItemButton 
-                                onClick={item.handler} 
-                                title={item.text} 
-                                selected={currentView === item.view} 
-                                sx={{ 
-                                    minHeight: 48, 
-                                    justifyContent: isDrawerVisuallyOpen ? 'initial' : 'center', 
-                                    px: 2.5, 
-                                    '&.Mui-selected': { bgcolor: 'action.selected', '&:hover': { bgcolor: 'action.hover' }} 
+                            <ListItemButton
+                                onClick={item.handler}
+                                title={item.text}
+                                selected={currentView === item.view}
+                                sx={{
+                                    minHeight: 48,
+                                    justifyContent: isDrawerVisuallyOpen ? 'initial' : 'center',
+                                    px: 2.5,
+                                    '&.Mui-selected': { bgcolor: 'action.selected', '&:hover': { bgcolor: 'action.hover' }}
                                 }}
                             >
                                 <ListItemIcon sx={{ minWidth: 0, mr: isDrawerVisuallyOpen ? 3 : 'auto', justifyContent: 'center' }}>{item.icon}</ListItemIcon>
@@ -1302,22 +1330,22 @@ function App() {
                             <MenuIcon />
                         </IconButton>
                         <Typography variant="h6" noWrap component="div">
-                            {currentView === 'settings' ? 'Settings' 
-                            : currentView === 'insights' ? 'Insights' 
+                            {currentView === 'settings' ? 'Settings'
+                            : currentView === 'insights' ? 'Insights'
                             : currentView === 'assistant' ? 'Assistant'
-                            : selectedEntry ? (isEditingSelectedEntry ? `Editing: ${formatDate(selectedEntry.date)}` : formatDate(selectedEntry.date)) 
+                            : selectedEntry ? (isEditingSelectedEntry ? `Editing: ${formatDate(selectedEntry.date)}` : formatDate(selectedEntry.date))
                             : "MoodJourney"}
                         </Typography>
                     </Toolbar>
                 </AppBar>
                 <Drawer variant="permanent" open={isDrawerVisuallyOpen} onMouseEnter={handleDrawerHoverOpen} onMouseLeave={handleDrawerHoverClose}>{drawerContent}</Drawer>
-                
+
                 <Box component="main" sx={{ flexGrow: 1, p: 3, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', height: '100%', overflow: 'hidden' }}>
-                    <Toolbar /> 
-                    
+                    <Toolbar />
+
                     {currentView === 'settings' ? <CombinedSettingsPage currentThemeMode={themeMode} onThemeModeChange={handleThemeModeChange} onBack={handleNewEntryClick} />
                     : currentView === 'insights' ? <InsightsPage entries={entries} theme={muiTheme} onBack={handleNewEntryClick} handleEntrySelect={handleEntrySelect} />
-                    : currentView === 'assistant' ? <AssistantPage theme={muiTheme} setStatus={setStatus} onBack={handleNewEntryClick} /> 
+                    : currentView === 'assistant' ? <AssistantPage theme={muiTheme} setStatus={setStatus} onBack={handleNewEntryClick} />
                     : selectedEntry && currentView === 'main' ? (
                         <><Box sx={{ mb: 2, alignSelf: 'flex-start', flexShrink: 0 }}><Button startIcon={<ArrowBackIcon />} onClick={handleNewEntryClick} variant="outlined">Back to Journal</Button></Box>
                         <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, width: '100%', flexGrow: 1, overflow: 'hidden' }}>
@@ -1328,15 +1356,15 @@ function App() {
                                 {!isEditingSelectedEntry && <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 'auto', pt: 2, flexShrink: 0, pl: muiTheme.spacing(1), pr: muiTheme.spacing(1), pb: muiTheme.spacing(1) }}><Button variant="outlined" startIcon={<EditIcon />} onClick={handleStartEditSelectedEntry} disabled={saving}>Edit Entry</Button><Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => handleDeleteEntryClick(selectedEntry)} disabled={saving}>Delete Entry</Button></Box>}
                             </Paper>
                             {selectedEntry && (
-                                <Paper sx={{ 
-                                    p: 1, 
-                                    flex: { xs: '1 1 auto', md: '1 1 0%' }, 
-                                    minWidth: 0, 
-                                    borderRadius: '16px', 
-                                    display: 'flex', 
-                                    flexDirection: 'column', 
-                                    overflow: 'hidden', 
-                                    borderLeft: {md: `1px solid ${muiTheme.palette.divider}`} 
+                                <Paper sx={{
+                                    p: 1,
+                                    flex: { xs: '1 1 auto', md: '1 1 0%' },
+                                    minWidth: 0,
+                                    borderRadius: '16px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    overflow: 'hidden',
+                                    borderLeft: {md: `1px solid ${muiTheme.palette.divider}`}
                                 }}>
                                     {!isEditingSelectedEntry && (
                                         <Box sx={{...scrollbarStyles(muiTheme), height: '100%', display: 'flex', flexDirection: 'column', p: 1.5, gap: 2 }}>
@@ -1347,15 +1375,15 @@ function App() {
                                                 <Paper elevation={0} sx={{
                                                     p: 1.5,
                                                     bgcolor: alpha(getEmotionColor(extractEmotionFromContent(selectedEntry.content), muiTheme), 0.15),
-                                                    borderRadius: '8px', 
+                                                    borderRadius: '8px',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
                                                 }}>
-                                                    <Typography variant="h6" sx={{ 
-                                                        color: getEmotionColor(extractEmotionFromContent(selectedEntry.content), muiTheme), 
-                                                        fontWeight: 'bold', 
-                                                        textTransform: 'capitalize' 
+                                                    <Typography variant="h6" sx={{
+                                                        color: getEmotionColor(extractEmotionFromContent(selectedEntry.content), muiTheme),
+                                                        fontWeight: 'bold',
+                                                        textTransform: 'capitalize'
                                                     }}>
                                                         {extractEmotionFromContent(selectedEntry.content) || "N/A"}
                                                     </Typography>
@@ -1365,20 +1393,20 @@ function App() {
                                                 <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 0.5, textAlign:'center' }}>
                                                     Feedback
                                                 </Typography>
-                                                <Paper variant="outlined" sx={{ 
-                                                    p: 1.5, 
-                                                    borderRadius: '8px', 
-                                                    flexGrow: 1, 
-                                                    overflow: 'hidden', 
-                                                    display: 'flex', 
-                                                    flexDirection: 'column' 
+                                                <Paper variant="outlined" sx={{
+                                                    p: 1.5,
+                                                    borderRadius: '8px',
+                                                    flexGrow: 1,
+                                                    overflow: 'hidden',
+                                                    display: 'flex',
+                                                    flexDirection: 'column'
                                                 }}>
                                                     <Box sx={{...scrollbarStyles(muiTheme), flexGrow: 1 }}>
-                                                        <Typography variant="body1" sx={{ 
-                                                            fontSize: '1.125rem', 
-                                                            whiteSpace: 'pre-wrap', 
+                                                        <Typography variant="body1" sx={{
+                                                            fontSize: '1.125rem',
+                                                            whiteSpace: 'pre-wrap',
                                                             wordBreak: 'break-word',
-                                                            color: 'text.primary' 
+                                                            color: 'text.primary'
                                                         }}>
                                                             {extractSuggestionFromContent(selectedEntry.content) || "No suggestion available for this entry."}
                                                         </Typography>
@@ -1432,17 +1460,17 @@ function App() {
                 </Dialog>
 
                 <Snackbar
-                    open={status.message && status.severity !== "info"} 
+                    open={status.message && status.severity !== "info"}
                     autoHideDuration={ALERT_TIMEOUT_DURATION}
                     onClose={handleCloseStatus}
                     anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-                    sx={{ mt: {xs: 7, sm: 8} }} 
+                    sx={{ mt: {xs: 7, sm: 8} }}
                 >
-                    <MuiAlert 
-                        onClose={handleCloseStatus} 
-                        severity={status.severity === "info" ? "success" : status.severity} 
-                        variant="filled" 
-                        sx={{ width: '100%', boxShadow: 6 }} 
+                    <MuiAlert
+                        onClose={handleCloseStatus}
+                        severity={status.severity === "info" ? "success" : status.severity}
+                        variant="filled"
+                        sx={{ width: '100%', boxShadow: 6 }}
                     >
                         {status.message}
                     </MuiAlert>

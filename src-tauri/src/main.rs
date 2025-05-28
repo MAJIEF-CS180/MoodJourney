@@ -13,7 +13,7 @@ use uuid::Uuid;
 use chrono::Local;
 
 use db::{
-    init_db, create_entry_with_now, get_entries, get_entry_by_date, update_entry_by_date, delete_entry_by_date, Entry,
+    init_db, create_entry_with_now, get_entries, get_entry_by_date, update_entry_by_date, delete_entry_by_date, Entry, delete_chat_session,
 };
 use dictation::{DictationModel, perform_dictation_cmd};
 use emotion::{EmotionModel, classify_emotion};
@@ -344,6 +344,11 @@ async fn load_messages_for_session_cmd(session_id: String) -> Result<Vec<db::Cha
     db::get_messages_for_session(&session_id).map_err(|e| e.to_string())
 }
 
+#[command]
+async fn delete_chat_session_cmd(session_id: String) -> Result<(), String> {
+    db::delete_chat_session(&session_id).map_err(|e| e.to_string())
+}
+
 fn main() {
     init_db().expect("Failed to initialize database");
 
@@ -398,7 +403,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![create_entry, read_entries, get_entry, update_entry, classify_emotion, delete_entry, perform_dictation_cmd,
-        upload_image_file, generate_suggestion_cmd, chat_with_moodjourney_cmd, load_chat_sessions, load_messages_for_session_cmd])
+        upload_image_file, generate_suggestion_cmd, chat_with_moodjourney_cmd, load_chat_sessions, load_messages_for_session_cmd, delete_chat_session_cmd])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

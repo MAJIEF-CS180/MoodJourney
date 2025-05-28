@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 
 // IMPORTANT: Replace "YOUR_GEMINI_API_KEY" with your actual Gemini API key.
 // Consider loading this from an environment variable or a config file for better security.
-const GEMINI_API_KEY: &str = "AIzaSyC5f5FArxGyP4eoj_T2l6bODn-ED5kHa4E";
+const GEMINI_API_KEY: &str = "AIzaSyDTciDxSbIMYQTk5Vmgp4fqg3XSlrLDvzs";
 const GEMINI_API_URL_BASE: &str = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
 
 #[derive(Deserialize, Debug)]

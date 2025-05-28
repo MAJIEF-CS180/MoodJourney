@@ -252,6 +252,11 @@ pub fn get_messages_for_session(session_id: &str) -> Result<Vec<ChatMessage>> {
     Ok(messages)
 }
 
+pub fn delete_chat_session(session_id: &str) -> Result<()> {
+    let conn = Connection::open("entries.db")?;
+    conn.execute("DELETE FROM assistant_chat_sessions WHERE id = ?1", params![session_id])?;
+    Ok(())
+}
 
 #[cfg(test)]
 mod tests {
