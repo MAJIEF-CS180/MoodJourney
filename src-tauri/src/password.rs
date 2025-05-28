@@ -27,7 +27,7 @@ impl PasswordState {
     fn load() -> Self {
         let path = dirs::config_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join("myapp")
+            .join("moodjourney")
             .join("password.json");
 
         fs::create_dir_all(path.parent().unwrap()).ok();
