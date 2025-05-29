@@ -4,6 +4,7 @@ mod db;
 mod dictation;
 mod emotion;
 mod suggestion;
+mod password;
 
 use std::fs;
 use std::io::Write; 
@@ -13,7 +14,7 @@ use uuid::Uuid;
 use chrono::Local;
 
 use db::{
-    init_db, create_entry_with_now, get_entries, get_entry_by_date, update_entry_by_date, delete_entry_by_date, Entry, delete_chat_session,
+    init_db, create_entry_with_now, get_entries, get_entry_by_date, update_entry_by_date, delete_entry_by_date, Entry,
 };
 use dictation::{DictationModel, perform_dictation_cmd};
 use emotion::{EmotionModel, classify_emotion};
@@ -31,6 +32,36 @@ pub struct SafeEmotionModelWrapper(pub EmotionModel);
 pub struct AppEmotionModel(pub Arc<SafeEmotionModelWrapper>);
 unsafe impl Send for SafeEmotionModelWrapper {}
 unsafe impl Sync for SafeEmotionModelWrapper {}
+
+#[command]
+fn is_locked() -> bool {
+    password::is_locked()
+}
+
+#[command]
+fn check_password_attempt(password: String) -> bool {
+    password::check_password(&password)
+}
+
+#[command]
+fn set_new_password(password: String) {
+    password::set_password(&password);
+}
+
+#[command]
+fn set_locked_cmd(locked: bool) {
+    password::set_locked(locked);
+}
+
+#[command]
+fn is_pin_set_cmd() -> bool {
+    password::get_is_pin_set()
+}
+
+#[command]
+fn delete_pin_cmd() {
+    password::do_delete_pin()
+}
 
 // automatically creates entry with current local date
 // content and password are optional
@@ -402,7 +433,7 @@ fn main() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![create_entry, read_entries, get_entry, update_entry, classify_emotion, delete_entry, perform_dictation_cmd,
+        .invoke_handler(tauri::generate_handler![is_locked, check_password_attempt, set_new_password, set_locked_cmd, is_pin_set_cmd, delete_pin_cmd, create_entry, read_entries, get_entry, update_entry, classify_emotion, delete_entry, perform_dictation_cmd,
         upload_image_file, generate_suggestion_cmd, chat_with_moodjourney_cmd, load_chat_sessions, load_messages_for_session_cmd, delete_chat_session_cmd])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

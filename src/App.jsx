@@ -32,6 +32,11 @@ import CloseIcon from '@mui/icons-material/Close';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import ChatIcon from '@mui/icons-material/Chat'; // For chat history items
 import MoreVertIcon from '@mui/icons-material/MoreVert'; // For three-dot menu
+import LockOpenIcon from '@mui/icons-material/LockOpen';
+import LockIcon from '@mui/icons-material/Lock';
+import VpnKeyIcon from '@mui/icons-material/VpnKey';
+// import PersonIcon from '@mui/icons-material/Person'; // Icon for name setting - Removed as per request
+
 
 const drawerWidth = 240;
 const miniDrawerWidth = 65;
@@ -163,8 +168,67 @@ const scrollbarStyles = (theme) => ({
     },
 });
 
-function CombinedSettingsPage({ currentThemeMode, onThemeModeChange, onBack }) {
+function CombinedSettingsPage({
+    currentThemeMode,
+    onThemeModeChange,
+    onBack,
+    isPinSet,
+    onOpenPinModal,
+    setStatus, // Added setStatus for PIN operations feedback
+    configuredUserName, // New prop for user name
+    onConfiguredUserNameChange // New prop for handling name change
+}) {
     const theme = useTheme();
+    const [pinMenuAnchorEl, setPinMenuAnchorEl] = useState(null);
+    const [localUserName, setLocalUserName] = useState(configuredUserName); // Local state for editing
+
+    useEffect(() => {
+        setLocalUserName(configuredUserName); // Sync with prop
+    }, [configuredUserName]);
+
+    const handlePinMenuOpen = (event) => {
+        setPinMenuAnchorEl(event.currentTarget);
+    };
+
+    const handlePinMenuClose = () => {
+        setPinMenuAnchorEl(null);
+    };
+
+    const handleCreatePin = () => {
+        onOpenPinModal('create');
+        handlePinMenuClose();
+    };
+
+    const handleChangePin = () => {
+        onOpenPinModal('change');
+        handlePinMenuClose();
+    };
+
+    const handleDeletePin = async () => {
+        try {
+            await invoke('delete_pin_cmd');
+            setStatus({ message: "PIN deleted successfully.", severity: "success" });
+            // Need to trigger a refresh of isPinSet in the App component
+            if (typeof window.refreshPinStatus === 'function') {
+                window.refreshPinStatus();
+            }
+        } catch (error) {
+            console.error("Failed to delete PIN:", error);
+            setStatus({ message: `Failed to delete PIN: ${error.message || String(error)}`, severity: "error" });
+        }
+        handlePinMenuClose();
+    };
+
+    const handleNameInputChange = (event) => {
+        setLocalUserName(event.target.value);
+    };
+
+    const handleNameSave = () => {
+        onConfiguredUserNameChange(localUserName); // Update parent state and localStorage
+        setStatus({ message: "Name updated successfully.", severity: "success" });
+    };
+
+
     return (
         <>
             <Box sx={{ mb: 2, alignSelf: 'flex-start', flexShrink: 0 }}>
@@ -172,8 +236,46 @@ function CombinedSettingsPage({ currentThemeMode, onThemeModeChange, onBack }) {
             </Box>
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, width: '100%', flexGrow: 1, overflow: 'hidden' }}>
                 <Paper sx={{ p: 1, flex: { xs: '1 1 auto', md: '2 1 0%' }, minWidth: 0, borderRadius: '16px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                    <Box sx={{...scrollbarStyles(theme), height: '100%'}}>
+                    <Box sx={{ ...scrollbarStyles(theme), height: '100%' }}>
                         <Box sx={{ p: theme.spacing(1.5), pr: theme.spacing(1), display: 'flex', flexDirection: 'column', height: '100%' }}>
+                            {/* User Name Setting */}
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', mb: 2, flexShrink: 0 }}>
+                                <Typography variant="body1" id="name-input-label" sx={{ fontSize: '1.125rem', mr: 2 }}>
+                                    Display Name
+                                </Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                     <TextField
+                                        id="user-name-input"
+                                        value={localUserName}
+                                        onChange={handleNameInputChange}
+                                        size="small"
+                                        sx={{
+                                            width: 'fit-content',
+                                            '& .MuiInputBase-root': {
+                                            borderRadius: '8px',
+                                            fontSize: '1rem', // match your intended font size
+                                            width: 'auto',
+                                            },
+                                            '& input': {
+                                            width: 'auto',
+                                            fontSize: '1rem',
+                                            padding: '6px 8px',
+                                            }
+                                        }}
+                                    />
+                                    <Button
+                                        variant="contained"
+                                        size="small"
+                                        onClick={handleNameSave}
+                                        disabled={localUserName === configuredUserName} // Disable if no change
+                                    >
+                                        Save
+                                    </Button>
+                                </Box>
+                            </Box>
+                            <Divider sx={{ my: 2 }} />
+
+                            {/* Theme Settings */}
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', width: '100%', mb: 2, flexShrink: 0 }}>
                                 <Typography variant="body1" id="theme-select-label" sx={{ fontSize: '1.125rem', mr: 2, pb: '0px' }}>Theme</Typography>
                                 <FormControl sx={{ minWidth: 240, mt: '0px' }} size="small">
@@ -184,12 +286,63 @@ function CombinedSettingsPage({ currentThemeMode, onThemeModeChange, onBack }) {
                                     </Select>
                                 </FormControl>
                             </Box>
-                            <Typography variant="body1" color="text.secondary" sx={{ mt: 'auto', fontSize: '1.125rem', flexShrink: 0, textAlign:'left', pt: 2 }}>MoodJourney v0.1.0</Typography>
+
+                            {/* PIN Settings */}
+                            <Divider sx={{ my: 2 }} />
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', mb: 2 }}>
+                                <Typography variant="body1" sx={{ fontSize: '1.125rem', mr: 2 }}>
+                                    Application PIN
+                                </Typography>
+                                <Button
+                                    variant="outlined"
+                                    onClick={handlePinMenuOpen}
+                                    endIcon={<MoreVertIcon />}
+                                    startIcon={isPinSet ? <LockIcon /> : <LockOpenIcon />}
+                                >
+                                    {isPinSet ? "Manage PIN" : "Create PIN"}
+                                </Button>
+                                <Menu
+                                    anchorEl={pinMenuAnchorEl}
+                                    open={Boolean(pinMenuAnchorEl)}
+                                    onClose={handlePinMenuClose}
+                                >
+                                    {isPinSet ? (
+                                        [
+                                            <MenuItem key="change" onClick={handleChangePin}>
+                                                <ListItemIcon><VpnKeyIcon fontSize="small" /></ListItemIcon>
+                                                <ListItemText>Change PIN</ListItemText>
+                                            </MenuItem>,
+                                            <MenuItem key="delete" onClick={handleDeletePin}>
+                                                <ListItemIcon><DeleteIcon fontSize="small" /></ListItemIcon>
+                                                <ListItemText>Delete PIN</ListItemText>
+                                            </MenuItem>
+                                        ]
+                                    ) : (
+                                        <MenuItem onClick={handleCreatePin}>
+                                            <ListItemIcon><AddIcon fontSize="small" /></ListItemIcon>
+                                            <ListItemText>Create PIN</ListItemText>
+                                        </MenuItem>
+                                    )}
+                                </Menu>
+                            </Box>
+
+
+                            <Typography variant="body1" color="text.secondary" sx={{ mt: 'auto', fontSize: '1.125rem', flexShrink: 0, textAlign: 'left', pt: 2 }}>MoodJourney v0.1.0</Typography>
                         </Box>
                     </Box>
                 </Paper>
                 <Paper sx={{ p: 1, flex: { xs: '1 1 auto', md: '1 1 0%' }, minWidth: 0, borderRadius: '16px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                    <Box sx={{p: theme.spacing(1.5), pr: theme.spacing(1)}}>{/* Intentionally empty */}</Box>
+                    <Box sx={{ p: theme.spacing(1.5), pr: theme.spacing(1) }}>
+                        <Typography variant="h6" gutterBottom>PIN Security</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            {isPinSet
+                                ? "A PIN is set for this application. You will be asked to enter it when the application starts."
+                                : "No PIN is currently set. You can create a 4-digit PIN to secure your journal."}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{mt: 1}}>
+                            Keep your PIN memorable but secure.
+                        </Typography>
+                    </Box>
                 </Paper>
             </Box>
         </>
@@ -277,7 +430,7 @@ function InsightsPage({ entries, theme, onBack, handleEntrySelect }) {
 
                     // Always render this block, showing count (which can be 0)
                     return (
-                        <Box key={emotionKey} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, p:1, borderRadius: '8px', background: alpha(getEmotionColor(emotionKey, theme), 0.1) }}>
+                        <Box key={emotionKey} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, p: 1, borderRadius: '8px', background: alpha(getEmotionColor(emotionKey, theme), 0.1) }}>
                             <Typography variant="body1" sx={{ textTransform: 'capitalize', color: getEmotionColor(emotionKey, theme) }}>{displayName}</Typography>
                             <Typography variant="body1" sx={{ fontWeight: 'bold', color: getEmotionColor(emotionKey, theme) }}>{count}</Typography>
                         </Box>
@@ -286,7 +439,7 @@ function InsightsPage({ entries, theme, onBack, handleEntrySelect }) {
 
                 {/* Render unknown emotions if count > 0 */}
                 {emotionCounts.unknown > 0 && (
-                    <Box key="unknown" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, p:1, borderRadius: '8px', background: alpha(getEmotionColor("unknown", theme), 0.1) }}>
+                    <Box key="unknown" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, p: 1, borderRadius: '8px', background: alpha(getEmotionColor("unknown", theme), 0.1) }}>
                         <Typography variant="body1" sx={{ textTransform: 'capitalize', color: getEmotionColor("unknown", theme) }}>Unknown</Typography>
                         <Typography variant="body1" sx={{ fontWeight: 'bold', color: getEmotionColor("unknown", theme) }}>{emotionCounts.unknown}</Typography>
                     </Box>
@@ -342,7 +495,7 @@ function InsightsPage({ entries, theme, onBack, handleEntrySelect }) {
                         fontSize: '0.6rem',
                         color: entryForDay ? alpha(theme.palette.getContrastText(squareColor), 0.8) : theme.palette.text.secondary,
                         lineHeight: 1,
-                     }}>
+                    }}>
                         {dayNumber}
                     </Typography>
                 </Box>
@@ -351,7 +504,7 @@ function InsightsPage({ entries, theme, onBack, handleEntrySelect }) {
     };
 
     const renderDayHeaders = () => (
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: theme.spacing(0.75), p: `${theme.spacing(0.25)} ${theme.spacing(0.75)} 0 ${theme.spacing(0.75)}` , mb: 0.5}}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: theme.spacing(0.75), p: `${theme.spacing(0.25)} ${theme.spacing(0.75)} 0 ${theme.spacing(0.75)}`, mb: 0.5 }}>
             {dayAbbreviations.map(day => (
                 <Typography key={day} variant="caption" align="center" sx={{ fontWeight: 'bold', color: theme.palette.text.secondary }}>
                     {day}
@@ -374,7 +527,7 @@ function InsightsPage({ entries, theme, onBack, handleEntrySelect }) {
                 <Paper sx={{ p: 1, flex: { xs: '1 1 auto', md: '2 1 0%' }, minWidth: 0, borderRadius: '16px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                     {insightsViewMode === "Informative" ? (
                         entries.length > 0 ? (
-                            <Box sx={{...scrollbarStyles(theme), height: '100%'}}>
+                            <Box sx={{ ...scrollbarStyles(theme), height: '100%' }}>
                                 <Box sx={{ p: theme.spacing(1.5) }}>
                                     {entries.map(entry => {
                                         const rawEmotion = extractEmotionFromContent(entry.content);
@@ -469,7 +622,7 @@ function InsightsPage({ entries, theme, onBack, handleEntrySelect }) {
                                     }
                                 </Typography>
                                 <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                                    <FormControlLabel control={<Switch checked={calendarGranularity === "year"} onChange={(e) => setCalendarGranularity(e.target.checked ? "year" : "month")} />} label={calendarGranularity === "year" ? "Year View" : "Month View"} sx={{mr:1}} />
+                                    <FormControlLabel control={<Switch checked={calendarGranularity === "year"} onChange={(e) => setCalendarGranularity(e.target.checked ? "year" : "month")} />} label={calendarGranularity === "year" ? "Year View" : "Month View"} sx={{ mr: 1 }} />
                                     {calendarGranularity === "month" && ( /* Month dropdown first */
                                         <FormControl size="small" sx={{ minWidth: 130 }}>
                                             <InputLabel id="month-select-label">Month</InputLabel>
@@ -512,8 +665,8 @@ function InsightsPage({ entries, theme, onBack, handleEntrySelect }) {
                                 {calendarGranularity === "year" && (
                                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                         {monthNames.map((monthName, monthIndex) => (
-                                            <Box key={monthIndex} sx={{mb: 1}}>
-                                                <Typography variant="h6" component="div" sx={{ textAlign: 'center', mb: 0.5, fontWeight:'medium', color: theme.palette.text.primary }}>
+                                            <Box key={monthIndex} sx={{ mb: 1 }}>
+                                                <Typography variant="h6" component="div" sx={{ textAlign: 'center', mb: 0.5, fontWeight: 'medium', color: theme.palette.text.primary }}>
                                                     {monthName} {currentDisplayYear}
                                                 </Typography>
                                                 {renderDayHeaders()}
@@ -549,7 +702,7 @@ function InsightsPage({ entries, theme, onBack, handleEntrySelect }) {
                     flexDirection: 'column',
                     borderLeft: { md: `1px solid ${theme.palette.divider}` },
                 }}>
-                    <Box sx={{flexShrink: 0, ...scrollbarStyles(theme) }}>
+                    <Box sx={{ flexShrink: 0, ...scrollbarStyles(theme) }}>
                         <EmotionSummaryList />
                     </Box>
                     <Divider sx={{ my: 1, flexShrink: 0 }} />
@@ -573,7 +726,7 @@ function InsightsPage({ entries, theme, onBack, handleEntrySelect }) {
                                 >
                                     <CloseIcon />
                                 </IconButton>
-                                <Typography variant="h6" gutterBottom sx={{fontWeight: 'bold'}}>
+                                <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
                                     {formatDate(selectedInsightEntry.date)}
                                 </Typography>
                                 {(() => {
@@ -764,11 +917,11 @@ function AssistantPage({ theme, setStatus, onBack }) {
                 text: msg.content,
                 timestamp: msg.timestamp,
             }));
-            setMessages(formatted.length > 0 ? formatted : [{id: `empty-${sessionId}-${Date.now()}`, sender: 'assistant', text: "This chat is empty. Send a message to start!"}]);
+            setMessages(formatted.length > 0 ? formatted : [{ id: `empty-${sessionId}-${Date.now()}`, sender: 'assistant', text: "This chat is empty. Send a message to start!" }]);
         } catch (error) {
             console.error(`Failed to load messages for session ${sessionId}:`, error);
             setStatus({ message: `Failed to load messages: ${error.message || String(error)}`, severity: "error" });
-            setMessages([{id: `error-${Date.now()}`, sender: 'assistant', text: "Could not load chat messages."}]);
+            setMessages([{ id: `error-${Date.now()}`, sender: 'assistant', text: "Could not load chat messages." }]);
         } finally {
             setIsLoadingChatMessages(false);
         }
@@ -883,7 +1036,7 @@ function AssistantPage({ theme, setStatus, onBack }) {
                     position: 'relative' // For the loading overlay
                 }}>
                     {isLoadingChatMessages && (
-                        <Box sx={{position:'absolute', top:0,left:0,right:0,bottom:0,display:'flex',justifyContent:'center',alignItems:'center',bgcolor:alpha(theme.palette.background.paper,0.7),zIndex:10, borderRadius: '16px'}}>
+                        <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', bgcolor: alpha(theme.palette.background.paper, 0.7), zIndex: 10, borderRadius: '16px' }}>
                             <CircularProgress />
                         </Box>
                     )}
@@ -911,11 +1064,11 @@ function AssistantPage({ theme, setStatus, onBack }) {
                                 </Paper>
                             </Box>
                         ))}
-                        {isLoading && messages.length > 0 && messages[messages.length-1].sender === 'user' && (
+                        {isLoading && messages.length > 0 && messages[messages.length - 1].sender === 'user' && (
                             <Box sx={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Paper elevation={1} sx={{ p: 1.5, borderRadius: '12px', bgcolor: alpha(theme.palette.secondary.main, 0.2), color: theme.palette.text.primary, border: `1px solid ${theme.palette.secondary.main}` }}>
-                                    <CircularProgress size={20} color="inherit" sx={{color: theme.palette.text.primary}} />
-                                    <Typography variant="body2" sx={{ml:1, display: 'inline', color: theme.palette.text.primary}}>Assistant is typing...</Typography>
+                                    <CircularProgress size={20} color="inherit" sx={{ color: theme.palette.text.primary }} />
+                                    <Typography variant="body2" sx={{ ml: 1, display: 'inline', color: theme.palette.text.primary }}>Assistant is typing...</Typography>
                                 </Paper>
                             </Box>
                         )}
@@ -950,16 +1103,16 @@ function AssistantPage({ theme, setStatus, onBack }) {
                 {/* Chat History (1/3 box) */}
                 <Paper sx={{ p: 1, flex: { xs: '1 1 auto', md: '1 1 0%' }, minWidth: 0, borderRadius: '16px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                     {isLoadingSessions ? (
-                        <Box sx={{display: 'flex', justifyContent: 'center', alignItems: 'center', flexGrow: 1, pt: 2}}><CircularProgress /></Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexGrow: 1, pt: 2 }}><CircularProgress /></Box>
                     ) : chatSessions.length === 0 ? (
-                        <Typography sx={{p:2, textAlign: 'center', color: 'text.secondary', flexGrow:1, display:'flex', alignItems:'center', justifyContent:'center'}}>No chat history.</Typography>
+                        <Typography sx={{ p: 2, textAlign: 'center', color: 'text.secondary', flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>No chat history.</Typography>
                     ) : (
-                        <List sx={{ overflowY: 'auto', flexGrow: 1, ...scrollbarStyles(theme), p:0, '& .MuiListItemButton-root': {pt:0.75, pb:0.75} }}>
+                        <List sx={{ overflowY: 'auto', flexGrow: 1, ...scrollbarStyles(theme), p: 0, '& .MuiListItemButton-root': { pt: 0.75, pb: 0.75 } }}>
                             {chatSessions.map(session => (
                                 <ListItem
                                     key={session.id}
                                     disablePadding
-                                    sx={{px: 0.5, mb: 0.5}}
+                                    sx={{ px: 0.5, mb: 0.5 }}
                                     secondaryAction={
                                         <IconButton edge="end" aria-label="options" onClick={(event) => handleMenuOpen(event, session.id)}>
                                             <MoreVertIcon />
@@ -969,9 +1122,9 @@ function AssistantPage({ theme, setStatus, onBack }) {
                                     <ListItemButton
                                         selected={session.id === currentSessionId}
                                         onClick={() => handleSessionSelect(session.id)}
-                                        sx={{borderRadius: '8px', pr: openedMenuSessionId === session.id ? '48px' : 'inherit', '&.Mui-selected': {bgcolor: alpha(theme.palette.primary.main, 0.15), '&:hover': {bgcolor: alpha(theme.palette.primary.main, 0.2)} }, '&:hover': {bgcolor: alpha(theme.palette.action.hover, 0.5)}}}
+                                        sx={{ borderRadius: '8px', pr: openedMenuSessionId === session.id ? '48px' : 'inherit', '&.Mui-selected': { bgcolor: alpha(theme.palette.primary.main, 0.15), '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.2) } }, '&:hover': { bgcolor: alpha(theme.palette.action.hover, 0.5) } }}
                                     >
-                                        <ListItemIcon sx={{minWidth: 'auto', mr: 1.5, color: session.id === currentSessionId ? theme.palette.primary.main : theme.palette.text.secondary }}>
+                                        <ListItemIcon sx={{ minWidth: 'auto', mr: 1.5, color: session.id === currentSessionId ? theme.palette.primary.main : theme.palette.text.secondary }}>
                                             <ChatIcon fontSize="small" />
                                         </ListItemIcon>
                                         <ListItemText
@@ -981,7 +1134,7 @@ function AssistantPage({ theme, setStatus, onBack }) {
                                                 sx: { fontWeight: session.id === currentSessionId ? 'bold' : 'normal', fontSize: '0.9rem', color: session.id === currentSessionId ? theme.palette.primary.main : theme.palette.text.primary }
                                             }}
                                             secondary={formatChatTimestamp(session.last_modified_at)}
-                                            secondaryTypographyProps={{noWrap: true, fontSize: '0.75rem'}}
+                                            secondaryTypographyProps={{ noWrap: true, fontSize: '0.75rem' }}
                                         />
                                     </ListItemButton>
                                 </ListItem>
@@ -1042,15 +1195,16 @@ const baseThemeOptions = {
         MuiPaper: { defaultProps: { elevation: 0 }, styleOverrides: { root: ({ theme }) => ({ backgroundColor: theme.palette.background.paper, border: `1px solid ${theme.palette.divider}` }) } },
         MuiDrawer: { styleOverrides: { paper: ({ theme }) => ({ backgroundColor: theme.palette.background.paper, borderRight: `1px solid ${theme.palette.divider}` }) } },
         MuiAppBar: { defaultProps: { elevation: 0 }, styleOverrides: { root: ({ theme }) => ({ backgroundColor: theme.palette.background.paper, color: theme.palette.text.primary, borderBottom: `1px solid ${theme.palette.divider}` }) } },
-        MuiAlert: { styleOverrides: { root: { borderRadius: '8px'}, standardSuccess: ({ theme }) => ({ color: theme.palette.primary.main, backgroundColor: alpha(theme.palette.primary.main, theme.palette.mode === 'light' ? 0.12 : 0.18), '& .MuiAlert-icon': { color: theme.palette.primary.main } }), standardError: ({ theme }) => ({ color: theme.palette.error.main, backgroundColor: alpha(theme.palette.error.main, theme.palette.mode === 'light' ? 0.12 : 0.18), '& .MuiAlert-icon': { color: theme.palette.error.main } }), standardWarning: ({ theme }) => ({ color: theme.palette.mode === 'light' ? theme.palette.warning.dark : theme.palette.warning.light, backgroundColor: alpha(theme.palette.warning.main, theme.palette.mode === 'light' ? 0.12 : 0.18), '& .MuiAlert-icon': { color: theme.palette.mode === 'light' ? theme.palette.warning.dark : theme.palette.warning.light } }), standardInfo: ({ theme }) => ({ color: theme.palette.info.main, backgroundColor: alpha(theme.palette.info.main, theme.palette.mode === 'light' ? 0.12 : 0.18), '& .MuiAlert-icon': { color: theme.palette.info.main } }) } },
-        MuiSelect: { styleOverrides: { root: ({theme}) => ({ }) } }
+        MuiAlert: { styleOverrides: { root: { borderRadius: '8px' }, standardSuccess: ({ theme }) => ({ color: theme.palette.primary.main, backgroundColor: alpha(theme.palette.primary.main, theme.palette.mode === 'light' ? 0.12 : 0.18), '& .MuiAlert-icon': { color: theme.palette.primary.main } }), standardError: ({ theme }) => ({ color: theme.palette.error.main, backgroundColor: alpha(theme.palette.error.main, theme.palette.mode === 'light' ? 0.12 : 0.18), '& .MuiAlert-icon': { color: theme.palette.error.main } }), standardWarning: ({ theme }) => ({ color: theme.palette.mode === 'light' ? theme.palette.warning.dark : theme.palette.warning.light, backgroundColor: alpha(theme.palette.warning.main, theme.palette.mode === 'light' ? 0.12 : 0.18), '& .MuiAlert-icon': { color: theme.palette.mode === 'light' ? theme.palette.warning.dark : theme.palette.warning.light } }), standardInfo: ({ theme }) => ({ color: theme.palette.info.main, backgroundColor: alpha(theme.palette.info.main, theme.palette.mode === 'light' ? 0.12 : 0.18), '& .MuiAlert-icon': { color: theme.palette.info.main } }) } },
+        MuiSelect: { styleOverrides: { root: ({ theme }) => ({}) } }
     }
 };
-const lightTheme = createTheme({ ...baseThemeOptions, palette: { mode: 'light', primary: { main: '#23325A' }, secondary: { main: '#653666' }, background: { default: '#F3EEEB', paper: '#FFFCF9' }, text: { primary: '#23325A', secondary: alpha('#23325A', 0.7) }, action: { hover: alpha('#23325A', 0.06), selected: alpha('#23325A', 0.12) }, divider: alpha('#23325A', 0.2), warning: { main: '#FFA726', light: '#FFB74D', dark: '#F57C00' }, error: { main: '#D32F2F' }, info: {main: '#0288d1'} } });
-const darkTheme = createTheme({ ...baseThemeOptions, palette: { mode: 'dark', primary: { main: '#F3EEEB' }, secondary: { main: '#DECCCA' }, background: { default: '#1A2238', paper: '#23325A' }, text: { primary: '#F3EEEB', secondary: alpha('#F3EEEB', 0.7) }, action: { hover: alpha('#F3EEEB', 0.08), selected: alpha('#F3EEEB', 0.16) }, divider: alpha('#F3EEEB', 0.12), warning: { main: '#FFB74D', light: '#FFCC80', dark: '#FFA726' }, error: { main: '#E57373' }, info: {main: '#29b6f6'} } });
+const lightTheme = createTheme({ ...baseThemeOptions, palette: { mode: 'light', primary: { main: '#23325A' }, secondary: { main: '#653666' }, background: { default: '#F3EEEB', paper: '#FFFCF9' }, text: { primary: '#23325A', secondary: alpha('#23325A', 0.7) }, action: { hover: alpha('#23325A', 0.06), selected: alpha('#23325A', 0.12) }, divider: alpha('#23325A', 0.2), warning: { main: '#FFA726', light: '#FFB74D', dark: '#F57C00' }, error: { main: '#D32F2F' }, info: { main: '#0288d1' } } });
+const darkTheme = createTheme({ ...baseThemeOptions, palette: { mode: 'dark', primary: { main: '#F3EEEB' }, secondary: { main: '#DECCCA' }, background: { default: '#1A2238', paper: '#23325A' }, text: { primary: '#F3EEEB', secondary: alpha('#F3EEEB', 0.7) }, action: { hover: alpha('#F3EEEB', 0.08), selected: alpha('#F3EEEB', 0.16) }, divider: alpha('#F3EEEB', 0.12), warning: { main: '#FFB74D', light: '#FFCC80', dark: '#FFA726' }, error: { main: '#E57373' }, info: { main: '#29b6f6' } } });
 
 function App() {
     const [themeMode, setThemeMode] = useState(() => localStorage.getItem('appThemeMode') || 'system');
+    const [configuredUserName, setConfiguredUserName] = useState(() => localStorage.getItem('appConfiguredUserName') || 'Michael'); // New state for user name
     const [isDarkModeActive, setIsDarkModeActive] = useState(false);
     const [entries, setEntries] = useState([]);
     const [selectedEntry, setSelectedEntry] = useState(null);
@@ -1071,6 +1225,52 @@ function App() {
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [entryToDelete, setEntryToDelete] = useState(null);
 
+    // PIN Authentication State
+    const [isPinSet, setIsPinSet] = useState(false);
+    const [showPinModal, setShowPinModal] = useState(false);
+    const [pinInput, setPinInput] = useState("");
+    const [pinError, setPinError] = useState("");
+    const [pinAction, setPinAction] = useState(""); // 'create', 'change', 'delete', 'unlock'
+    const [isAppLocked, setIsAppLocked] = useState(true); // Assume locked initially until checked
+
+
+    const checkPinStatus = async () => {
+        try {
+            const pinIsCurrentlySet = await invoke('is_pin_set_cmd');
+            setIsPinSet(pinIsCurrentlySet);
+
+            if (pinIsCurrentlySet) {
+                const appIsLocked = await invoke('is_locked'); // Existing command for lock status
+                if (appIsLocked) {
+                    setIsAppLocked(true);
+                    setPinAction('unlock');
+                    setShowPinModal(true);
+                } else {
+                    setIsAppLocked(false);
+                }
+            } else {
+                setIsAppLocked(false); // No PIN, so not locked by PIN
+            }
+        } catch (error) {
+            console.error("Error checking PIN status:", error);
+            setStatus({ message: `Error checking PIN status: ${error.message || String(error)}`, severity: "error" });
+            setIsAppLocked(false); // Fallback to unlocked if error
+        }
+    };
+
+    // Expose checkPinStatus globally for settings page to refresh
+    useEffect(() => {
+        window.refreshPinStatus = checkPinStatus;
+        return () => {
+            delete window.refreshPinStatus;
+        };
+    }, []);
+
+
+    useEffect(() => {
+        checkPinStatus();
+    }, []);
+
 
     useEffect(() => {
         const prefersDarkMQ = window.matchMedia('(prefers-color-scheme: dark)');
@@ -1087,8 +1287,14 @@ function App() {
     }, [themeMode]);
 
     useEffect(() => { localStorage.setItem('appThemeMode', themeMode); }, [themeMode]);
+    
+    // Effect to save configured user name to localStorage
+    useEffect(() => {
+        localStorage.setItem('appConfiguredUserName', configuredUserName);
+    }, [configuredUserName]);
+
     const muiTheme = useMemo(() => (isDarkModeActive ? darkTheme : lightTheme), [isDarkModeActive]);
-    const userName = "Michael";
+    // const userName = "Michael"; // Removed, will use configuredUserName
     const isDrawerVisuallyOpen = drawerOpen || hoverOpen;
 
     const handleCloseStatus = (event, reason) => {
@@ -1106,10 +1312,11 @@ function App() {
         }
     };
 
-    const getGreeting = (name) => {
+    // Updated getGreeting to use configuredUserName
+    const getGreeting = () => {
         const hour = new Date().getHours();
         const timeOfDay = hour < 12 ? "Good Morning" : hour < 18 ? "Good Afternoon" : "Good Evening";
-        return name ? `${timeOfDay}, ${name}` : timeOfDay;
+        return configuredUserName ? `${timeOfDay}, ${configuredUserName}` : timeOfDay;
     };
 
     const getCurrentDateString = () => {
@@ -1130,7 +1337,7 @@ function App() {
         } finally { setLoading(false); }
     };
 
-    useEffect(() => { refreshEntriesList(); }, []);
+    useEffect(() => { if (!isAppLocked) refreshEntriesList(); }, [isAppLocked]); // Load entries only if app is not locked
 
     const handleStartDictation = async () => {
         let selectedPath = null;
@@ -1275,6 +1482,73 @@ function App() {
     };
     const handleThemeModeChange = (newMode) => setThemeMode(newMode);
     const handleToggleShowEntries = () => setShowAllEntriesInDrawer(prev => !prev);
+    const handleConfiguredUserNameChange = (newName) => { // Handler to update user name
+        setConfiguredUserName(newName);
+    };
+
+    // PIN Modal Handlers
+    const handleOpenPinModal = (action) => {
+        setPinAction(action);
+        setPinInput("");
+        setPinError("");
+        setShowPinModal(true);
+    };
+
+    const handleClosePinModal = () => {
+        setShowPinModal(false);
+        setPinInput("");
+        setPinError("");
+        // If unlocking failed and modal is closed, keep app locked.
+        // If creating/changing PIN is cancelled, it's fine.
+    };
+
+    const handlePinInputChange = (e) => {
+        const value = e.target.value;
+        if (/^\d*$/.test(value) && value.length <= 4) {
+            setPinInput(value);
+            setPinError("");
+        }
+    };
+
+    const handleSubmitPin = async () => {
+        if (pinInput.length !== 4) {
+            setPinError("PIN must be 4 digits.");
+            return;
+        }
+        setPinError("");
+        setSaving(true);
+
+        try {
+            if (pinAction === 'create' || pinAction === 'change') {
+                await invoke('set_new_password', { password: pinInput }); // Reusing existing command
+                setStatus({ message: `PIN ${pinAction === 'create' ? 'created' : 'changed'} successfully.`, severity: "success" });
+                setIsPinSet(true);
+                setIsAppLocked(true); // Setting a PIN should lock the app
+                await invoke('set_locked_cmd', { locked: true }); // Explicitly lock
+                handleClosePinModal();
+            } else if (pinAction === 'unlock') {
+                const isValid = await invoke('check_password_attempt', { password: pinInput }); // Reusing existing command
+                if (isValid) {
+                    setStatus({ message: "PIN verified. Unlocked.", severity: "success" });
+                    setIsAppLocked(false);
+                    handleClosePinModal();
+                } else {
+                    setPinError("Invalid PIN. Try again.");
+                }
+            }
+            // Deletion is handled directly in CombinedSettingsPage for now
+        } catch (error) {
+            console.error(`Failed to ${pinAction} PIN:`, error);
+            setPinError(`Failed: ${error.message || String(error)}`);
+            setStatus({ message: `Failed to ${pinAction} PIN: ${error.message || String(error)}`, severity: "error" });
+        } finally {
+            setSaving(false);
+            if (pinAction === 'create' || pinAction === 'change') { // Refresh pin status after create/change
+                 await checkPinStatus();
+            }
+        }
+    };
+
 
     const drawerContent = (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -1282,14 +1556,14 @@ function App() {
                 {drawerOpen && <Toolbar sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', px: [1] }}><IconButton onClick={handleDrawerClose} color="inherit">{muiTheme.direction === 'rtl' ? <ChevronRightIcon /> : <ChevronLeftIcon />}</IconButton></Toolbar>}
                 {!drawerOpen && <Toolbar sx={{ minHeight: { xs: 56, sm: 64 } }} />}
                 <Box sx={{ p: 1, mt: 2, mb: 1, overflow: 'hidden' }}><Button variant="contained" startIcon={<AddIcon />} fullWidth onClick={handleNewEntryClick} sx={{ justifyContent: isDrawerVisuallyOpen ? 'flex-start' : 'center', borderRadius: '16px', padding: '8px', minWidth: 0, '& .MuiButton-startIcon': { m: isDrawerVisuallyOpen ? '0 8px 0 -4px' : '0' } }}>{isDrawerVisuallyOpen && 'New Entry'}</Button></Box>
-                {isDrawerVisuallyOpen && (loading || entries.length > 0) && <Divider sx={{mb:1}}/>}
-                {isDrawerVisuallyOpen && entries.length > 0 && <Typography variant="subtitle1" sx={{ p: 2, pt:0, pb:0, color: 'text.primary', fontWeight: 'bold' }}>Recent</Typography>}
+                {isDrawerVisuallyOpen && (loading || entries.length > 0) && <Divider sx={{ mb: 1 }} />}
+                {isDrawerVisuallyOpen && entries.length > 0 && <Typography variant="subtitle1" sx={{ p: 2, pt: 0, pb: 0, color: 'text.primary', fontWeight: 'bold' }}>Recent</Typography>}
                 <List sx={{ pt: 0 }}>
                     {loading && isDrawerVisuallyOpen && <ListItem sx={{ justifyContent: 'center' }}><CircularProgress size={24} /></ListItem>}
                     {!loading && entries.length === 0 && isDrawerVisuallyOpen && <ListItem disablePadding><ListItemButton sx={{ minHeight: 48, justifyContent: 'initial', px: 2.5 }}><ListItemIcon sx={{ minWidth: 0, mr: 3, justifyContent: 'center' }}><ArticleIcon /></ListItemIcon><ListItemText primary="No entries" /></ListItemButton></ListItem>}
                     {!loading && isDrawerVisuallyOpen && entries.slice(0, showAllEntriesInDrawer ? entries.length : INITIAL_VISIBLE_ENTRIES).map((entry) => (<ListItem key={entry.date} disablePadding><ListItemButton selected={selectedEntry?.date === entry.date && currentView === 'main' && !isEditingSelectedEntry} onClick={() => handleEntrySelect(entry)} sx={{ minHeight: 48, justifyContent: 'initial', px: 2.5, '&.Mui-selected': { bgcolor: 'action.selected', '&:hover': { bgcolor: 'action.hover' } } }}><ListItemIcon sx={{ minWidth: 0, mr: 3, justifyContent: 'center' }}><ArticleIcon /></ListItemIcon><ListItemText primary={formatDate(entry.date)} /></ListItemButton></ListItem>))}
                 </List>
-                {isDrawerVisuallyOpen && !loading && entries.length > INITIAL_VISIBLE_ENTRIES && <Box sx={{ p: 1, display: 'flex', justifyContent: 'center' }}><Button onClick={handleToggleShowEntries} variant="text" size="small" endIcon={showAllEntriesInDrawer ? <ExpandLessIcon /> : <ExpandMoreIcon/>} sx={{ textTransform: 'none', color: 'text.secondary' }}>{showAllEntriesInDrawer ? 'Show Less' : `Show ${entries.length - INITIAL_VISIBLE_ENTRIES} More`}</Button></Box>}
+                {isDrawerVisuallyOpen && !loading && entries.length > INITIAL_VISIBLE_ENTRIES && <Box sx={{ p: 1, display: 'flex', justifyContent: 'center' }}><Button onClick={handleToggleShowEntries} variant="text" size="small" endIcon={showAllEntriesInDrawer ? <ExpandLessIcon /> : <ExpandMoreIcon />} sx={{ textTransform: 'none', color: 'text.secondary' }}>{showAllEntriesInDrawer ? 'Show Less' : `Show ${entries.length - INITIAL_VISIBLE_ENTRIES} More`}</Button></Box>}
             </Box>
             <Box sx={{ marginTop: 'auto', flexShrink: 0 }}><Divider />
                 <List>
@@ -1307,7 +1581,7 @@ function App() {
                                     minHeight: 48,
                                     justifyContent: isDrawerVisuallyOpen ? 'initial' : 'center',
                                     px: 2.5,
-                                    '&.Mui-selected': { bgcolor: 'action.selected', '&:hover': { bgcolor: 'action.hover' }}
+                                    '&.Mui-selected': { bgcolor: 'action.selected', '&:hover': { bgcolor: 'action.hover' } }
                                 }}
                             >
                                 <ListItemIcon sx={{ minWidth: 0, mr: isDrawerVisuallyOpen ? 3 : 'auto', justifyContent: 'center' }}>{item.icon}</ListItemIcon>
@@ -1320,121 +1594,179 @@ function App() {
         </Box>
     );
 
+    // Determine PIN Modal Title
+    let pinModalTitle = "PIN";
+    if (pinAction === 'create') pinModalTitle = "Create New PIN";
+    else if (pinAction === 'change') pinModalTitle = "Change PIN";
+    else if (pinAction === 'unlock') pinModalTitle = "Enter PIN to Unlock";
+
+
+    if (isAppLocked && !showPinModal && isPinSet) { // If app is locked but modal got closed somehow, re-trigger
+        setShowPinModal(true);
+        setPinAction('unlock');
+    }
+
+
     return (
         <ThemeProvider theme={muiTheme}>
             <CssBaseline />
             <Box sx={{ display: 'flex', height: '100vh', bgcolor: flashColor || muiTheme.palette.background.default, transition: 'background-color 0.5s ease' }}>
-                <AppBar position="fixed" isPinnedOpen={drawerOpen}>
-                    <Toolbar>
-                        <IconButton color="inherit" aria-label="open drawer" onClick={handleDrawerOpen} edge="start" sx={{ mr: 5, ...(drawerOpen && { display: 'none' }) }}>
-                            <MenuIcon />
-                        </IconButton>
-                        <Typography variant="h6" noWrap component="div">
-                            {currentView === 'settings' ? 'Settings'
-                            : currentView === 'insights' ? 'Insights'
-                            : currentView === 'assistant' ? 'Assistant'
-                            : selectedEntry ? (isEditingSelectedEntry ? `Editing: ${formatDate(selectedEntry.date)}` : formatDate(selectedEntry.date))
-                            : "MoodJourney"}
-                        </Typography>
-                    </Toolbar>
-                </AppBar>
-                <Drawer variant="permanent" open={isDrawerVisuallyOpen} onMouseEnter={handleDrawerHoverOpen} onMouseLeave={handleDrawerHoverClose}>{drawerContent}</Drawer>
+                {!isAppLocked && ( // Render AppBar and Drawer only if app is not locked
+                    <>
+                        <AppBar position="fixed" isPinnedOpen={drawerOpen}>
+                            <Toolbar>
+                                <IconButton color="inherit" aria-label="open drawer" onClick={handleDrawerOpen} edge="start" sx={{ mr: 5, ...(drawerOpen && { display: 'none' }) }}>
+                                    <MenuIcon />
+                                </IconButton>
+                                <Typography variant="h6" noWrap component="div">
+                                    {currentView === 'settings' ? 'Settings'
+                                        : currentView === 'insights' ? 'Insights'
+                                            : currentView === 'assistant' ? 'Assistant'
+                                                : selectedEntry ? (isEditingSelectedEntry ? `Editing: ${formatDate(selectedEntry.date)}` : formatDate(selectedEntry.date))
+                                                    : "MoodJourney"}
+                                </Typography>
+                            </Toolbar>
+                        </AppBar>
+                        <Drawer variant="permanent" open={isDrawerVisuallyOpen} onMouseEnter={handleDrawerHoverOpen} onMouseLeave={handleDrawerHoverClose}>{drawerContent}</Drawer>
+                    </>
+                )}
 
-                <Box component="main" sx={{ flexGrow: 1, p: 3, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', height: '100%', overflow: 'hidden' }}>
-                    <Toolbar />
+                <Box component="main" sx={{ flexGrow: 1, p: isAppLocked ? 0 : 3, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', height: '100%', overflow: 'hidden' }}>
+                    {!isAppLocked && <Toolbar /> /* Add Toolbar space only if not locked */}
 
-                    {currentView === 'settings' ? <CombinedSettingsPage currentThemeMode={themeMode} onThemeModeChange={handleThemeModeChange} onBack={handleNewEntryClick} />
-                    : currentView === 'insights' ? <InsightsPage entries={entries} theme={muiTheme} onBack={handleNewEntryClick} handleEntrySelect={handleEntrySelect} />
-                    : currentView === 'assistant' ? <AssistantPage theme={muiTheme} setStatus={setStatus} onBack={handleNewEntryClick} />
-                    : selectedEntry && currentView === 'main' ? (
-                        <><Box sx={{ mb: 2, alignSelf: 'flex-start', flexShrink: 0 }}><Button startIcon={<ArrowBackIcon />} onClick={handleNewEntryClick} variant="outlined">Back to Journal</Button></Box>
-                        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, width: '100%', flexGrow: 1, overflow: 'hidden' }}>
-                            <Paper sx={{ p: 1, flex: { xs: '1 1 auto', md: '2 1 0%' }, minWidth: 0, borderRadius: '16px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                                {isEditingSelectedEntry ? (<Box sx={{...scrollbarStyles(muiTheme), height: '100%'}}><Box sx={{ p: muiTheme.spacing(1.5), pr: muiTheme.spacing(1), height: '100%', display: 'flex', flexDirection: 'column' }}><TextField value={editedContentText} onChange={(e) => setEditedContentText(e.target.value)} multiline rows={10} fullWidth variant="outlined" sx={{ fontSize: '1.125rem', flexGrow: 1, '& .MuiOutlinedInput-root': { borderRadius: '8px', height: '100%', '& .MuiOutlinedInput-input': { height: '100% !important', overflowY: 'auto !important' } }, pt: muiTheme.spacing(1), mb: 2 }} placeholder="Edit your thoughts here..." /><Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 'auto', pt: 2, flexShrink: 0 }}><Button variant="outlined" color="inherit" startIcon={<CancelIcon />} onClick={handleCancelEditSelectedEntry} disabled={saving}>Cancel</Button><Button variant="contained" color="primary" startIcon={<SaveIcon />} onClick={handleConfirmUpdateSelectedEntry} disabled={saving || !editedContentText.trim()}>Save Changes</Button></Box></Box></Box>)
-                                : (<Box sx={{...scrollbarStyles(muiTheme), height: '100%'}}><Box sx={{p: muiTheme.spacing(1.5), pr: muiTheme.spacing(1) }}><Typography variant="body1" sx={{ fontSize: '1.125rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word', mb: 2, pt: muiTheme.spacing(1) }}>{getMainContent(selectedEntry.content)}</Typography></Box></Box>)}
-                                {/* Updated Delete Button to call handleDeleteEntryClick */}
-                                {!isEditingSelectedEntry && <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 'auto', pt: 2, flexShrink: 0, pl: muiTheme.spacing(1), pr: muiTheme.spacing(1), pb: muiTheme.spacing(1) }}><Button variant="outlined" startIcon={<EditIcon />} onClick={handleStartEditSelectedEntry} disabled={saving}>Edit Entry</Button><Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => handleDeleteEntryClick(selectedEntry)} disabled={saving}>Delete Entry</Button></Box>}
-                            </Paper>
-                            {selectedEntry && (
-                                <Paper sx={{
-                                    p: 1,
-                                    flex: { xs: '1 1 auto', md: '1 1 0%' },
-                                    minWidth: 0,
-                                    borderRadius: '16px',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    overflow: 'hidden',
-                                    borderLeft: {md: `1px solid ${muiTheme.palette.divider}`}
-                                }}>
-                                    {!isEditingSelectedEntry && (
-                                        <Box sx={{...scrollbarStyles(muiTheme), height: '100%', display: 'flex', flexDirection: 'column', p: 1.5, gap: 2 }}>
-                                            <Box sx={{ flexShrink: 0 }}>
-                                                <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 0.5, textAlign:'center' }}>
-                                                    Emotion
-                                                </Typography>
-                                                <Paper elevation={0} sx={{
-                                                    p: 1.5,
-                                                    bgcolor: alpha(getEmotionColor(extractEmotionFromContent(selectedEntry.content), muiTheme), 0.15),
-                                                    borderRadius: '8px',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                }}>
-                                                    <Typography variant="h6" sx={{
-                                                        color: getEmotionColor(extractEmotionFromContent(selectedEntry.content), muiTheme),
-                                                        fontWeight: 'bold',
-                                                        textTransform: 'capitalize'
-                                                    }}>
-                                                        {extractEmotionFromContent(selectedEntry.content) || "N/A"}
-                                                    </Typography>
+                    {isAppLocked ? null : // Don't render main content if locked
+                        currentView === 'settings' ? <CombinedSettingsPage currentThemeMode={themeMode} onThemeModeChange={handleThemeModeChange} onBack={handleNewEntryClick} isPinSet={isPinSet} onOpenPinModal={handleOpenPinModal} setStatus={setStatus} configuredUserName={configuredUserName} onConfiguredUserNameChange={handleConfiguredUserNameChange} />
+                            : currentView === 'insights' ? <InsightsPage entries={entries} theme={muiTheme} onBack={handleNewEntryClick} handleEntrySelect={handleEntrySelect} />
+                                : currentView === 'assistant' ? <AssistantPage theme={muiTheme} setStatus={setStatus} onBack={handleNewEntryClick} />
+                                    : selectedEntry && currentView === 'main' ? (
+                                        <><Box sx={{ mb: 2, alignSelf: 'flex-start', flexShrink: 0 }}><Button startIcon={<ArrowBackIcon />} onClick={handleNewEntryClick} variant="outlined">Back to Journal</Button></Box>
+                                            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, width: '100%', flexGrow: 1, overflow: 'hidden' }}>
+                                                <Paper sx={{ p: 1, flex: { xs: '1 1 auto', md: '2 1 0%' }, minWidth: 0, borderRadius: '16px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                                                    {isEditingSelectedEntry ? (<Box sx={{ ...scrollbarStyles(muiTheme), height: '100%' }}><Box sx={{ p: muiTheme.spacing(1.5), pr: muiTheme.spacing(1), height: '100%', display: 'flex', flexDirection: 'column' }}><TextField value={editedContentText} onChange={(e) => setEditedContentText(e.target.value)} multiline rows={10} fullWidth variant="outlined" sx={{ fontSize: '1.125rem', flexGrow: 1, '& .MuiOutlinedInput-root': { borderRadius: '8px', height: '100%', '& .MuiOutlinedInput-input': { height: '100% !important', overflowY: 'auto !important' } }, pt: muiTheme.spacing(1), mb: 2 }} placeholder="Edit your thoughts here..." /><Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 'auto', pt: 2, flexShrink: 0 }}><Button variant="outlined" color="inherit" startIcon={<CancelIcon />} onClick={handleCancelEditSelectedEntry} disabled={saving}>Cancel</Button><Button variant="contained" color="primary" startIcon={<SaveIcon />} onClick={handleConfirmUpdateSelectedEntry} disabled={saving || !editedContentText.trim()}>Save Changes</Button></Box></Box></Box>)
+                                                        : (<Box sx={{ ...scrollbarStyles(muiTheme), height: '100%' }}><Box sx={{ p: muiTheme.spacing(1.5), pr: muiTheme.spacing(1) }}><Typography variant="body1" sx={{ fontSize: '1.125rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word', mb: 2, pt: muiTheme.spacing(1) }}>{getMainContent(selectedEntry.content)}</Typography></Box></Box>)}
+                                                    {/* Updated Delete Button to call handleDeleteEntryClick */}
+                                                    {!isEditingSelectedEntry && <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 'auto', pt: 2, flexShrink: 0, pl: muiTheme.spacing(1), pr: muiTheme.spacing(1), pb: muiTheme.spacing(1) }}><Button variant="outlined" startIcon={<EditIcon />} onClick={handleStartEditSelectedEntry} disabled={saving}>Edit Entry</Button><Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => handleDeleteEntryClick(selectedEntry)} disabled={saving}>Delete Entry</Button></Box>}
                                                 </Paper>
+                                                {selectedEntry && (
+                                                    <Paper sx={{
+                                                        p: 1,
+                                                        flex: { xs: '1 1 auto', md: '1 1 0%' },
+                                                        minWidth: 0,
+                                                        borderRadius: '16px',
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        overflow: 'hidden',
+                                                        borderLeft: { md: `1px solid ${muiTheme.palette.divider}` }
+                                                    }}>
+                                                        {!isEditingSelectedEntry && (
+                                                            <Box sx={{ ...scrollbarStyles(muiTheme), height: '100%', display: 'flex', flexDirection: 'column', p: 1.5, gap: 2 }}>
+                                                                <Box sx={{ flexShrink: 0 }}>
+                                                                    <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 0.5, textAlign: 'center' }}>
+                                                                        Emotion
+                                                                    </Typography>
+                                                                    <Paper elevation={0} sx={{
+                                                                        p: 1.5,
+                                                                        bgcolor: alpha(getEmotionColor(extractEmotionFromContent(selectedEntry.content), muiTheme), 0.15),
+                                                                        borderRadius: '8px',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                    }}>
+                                                                        <Typography variant="h6" sx={{
+                                                                            color: getEmotionColor(extractEmotionFromContent(selectedEntry.content), muiTheme),
+                                                                            fontWeight: 'bold',
+                                                                            textTransform: 'capitalize'
+                                                                        }}>
+                                                                            {extractEmotionFromContent(selectedEntry.content) || "N/A"}
+                                                                        </Typography>
+                                                                    </Paper>
+                                                                </Box>
+                                                                <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                                                                    <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 0.5, textAlign: 'center' }}>
+                                                                        Feedback
+                                                                    </Typography>
+                                                                    <Paper variant="outlined" sx={{
+                                                                        p: 1.5,
+                                                                        borderRadius: '8px',
+                                                                        flexGrow: 1,
+                                                                        overflow: 'hidden',
+                                                                        display: 'flex',
+                                                                        flexDirection: 'column'
+                                                                    }}>
+                                                                        <Box sx={{ ...scrollbarStyles(muiTheme), flexGrow: 1 }}>
+                                                                            <Typography variant="body1" sx={{
+                                                                                fontSize: '1.125rem',
+                                                                                whiteSpace: 'pre-wrap',
+                                                                                wordBreak: 'break-word',
+                                                                                color: 'text.primary'
+                                                                            }}>
+                                                                                {extractSuggestionFromContent(selectedEntry.content) || "No suggestion available for this entry."}
+                                                                            </Typography>
+                                                                        </Box>
+                                                                    </Paper>
+                                                                </Box>
+                                                            </Box>
+                                                        )}
+                                                    </Paper>
+                                                )}
+                                            </Box></>
+                                    ) : ( // Default view: New Entry / Greeting
+                                        <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', width: '100%' }}>
+                                            <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', overflowY: 'auto' }}>
+                                                {/* Updated to use getGreeting() which now uses configuredUserName */}
+                                                <Typography variant="h4" color="text.secondary" sx={{ fontWeight: 'bold', mb: 3 }}>{getGreeting()}</Typography>
                                             </Box>
-                                            <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                                                <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 0.5, textAlign:'center' }}>
-                                                    Feedback
-                                                </Typography>
-                                                <Paper variant="outlined" sx={{
-                                                    p: 1.5,
-                                                    borderRadius: '8px',
-                                                    flexGrow: 1,
-                                                    overflow: 'hidden',
-                                                    display: 'flex',
-                                                    flexDirection: 'column'
-                                                }}>
-                                                    <Box sx={{...scrollbarStyles(muiTheme), flexGrow: 1 }}>
-                                                        <Typography variant="body1" sx={{
-                                                            fontSize: '1.125rem',
-                                                            whiteSpace: 'pre-wrap',
-                                                            wordBreak: 'break-word',
-                                                            color: 'text.primary'
-                                                        }}>
-                                                            {extractSuggestionFromContent(selectedEntry.content) || "No suggestion available for this entry."}
-                                                        </Typography>
+                                            <Box sx={{ width: '100%', maxWidth: '800px', mx: 'auto', mb: 2, flexShrink: 0 }}>
+                                                <Paper sx={{ p: 2, borderRadius: '16px', display: 'flex', flexDirection: 'column' }}>
+                                                    <TextField id="journal-entry-input" placeholder="Write your thoughts here..." multiline minRows={4} value={entryText} onChange={(e) => setEntryText(e.target.value)} variant="standard" fullWidth InputProps={{ disableUnderline: true }} sx={{ flexGrow: 1, mb: 1, fontSize: '1.125rem', p: 1, borderRadius: '4px' }} />
+                                                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+                                                        {entryText.trim() === "" ? <IconButton color="primary" onClick={handleStartDictation} disabled={isDictating} size="large" aria-label="start dictation">{isDictating ? <CircularProgress size={24} color="inherit" /> : <MicIcon />}</IconButton>
+                                                            : <IconButton color="primary" onClick={handleSaveEntry} disabled={saving || !entryText.trim()} size="large" aria-label="save entry">{saving ? <CircularProgress size={24} color="inherit" /> : <SendIcon />}</IconButton>}
                                                     </Box>
                                                 </Paper>
                                             </Box>
                                         </Box>
                                     )}
-                                </Paper>
-                            )}
-                        </Box></>
-                    ) : (
-                        <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', width: '100%'}}>
-                            <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', overflowY: 'auto' }}>
-                                <Typography variant="h4" color="text.secondary" sx={{ fontWeight: 'bold', mb: 3 }}>{getGreeting(userName)}</Typography>
-                            </Box>
-                            <Box sx={{ width: '100%', maxWidth: '800px', mx: 'auto', mb: 2, flexShrink: 0 }}>
-                                <Paper sx={{ p: 2, borderRadius: '16px', display: 'flex', flexDirection: 'column' }}>
-                                    <TextField id="journal-entry-input" placeholder="Write your thoughts here..." multiline minRows={4} value={entryText} onChange={(e) => setEntryText(e.target.value)} variant="standard" fullWidth InputProps={{ disableUnderline: true }} sx={{ flexGrow: 1, mb: 1, fontSize: '1.125rem', p: 1, borderRadius: '4px' }} />
-                                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
-                                        {entryText.trim() === "" ? <IconButton color="primary" onClick={handleStartDictation} disabled={isDictating} size="large" aria-label="start dictation">{isDictating ? <CircularProgress size={24} color="inherit" /> : <MicIcon />}</IconButton>
-                                        : <IconButton color="primary" onClick={handleSaveEntry} disabled={saving || !entryText.trim()} size="large" aria-label="save entry">{saving ? <CircularProgress size={24} color="inherit" /> : <SendIcon />}</IconButton>}
-                                    </Box>
-                                </Paper>
-                            </Box>
-                        </Box>
-                    )}
                 </Box>
+
+                {/* PIN Modal */}
+                <Dialog open={showPinModal} onClose={pinAction === 'unlock' ? null : handleClosePinModal} aria-labelledby="pin-dialog-title" disableEscapeKeyDown={pinAction === 'unlock'}>
+                    <DialogTitle id="pin-dialog-title">{pinModalTitle}</DialogTitle>
+                    <DialogContent>
+                        <DialogContentText>
+                            {pinAction === 'create' && "Enter a 4-digit PIN to secure your journal."}
+                            {pinAction === 'change' && "Enter your new 4-digit PIN."}
+                            {pinAction === 'unlock' && "Please enter your 4-digit PIN to continue."}
+                        </DialogContentText>
+                        <TextField
+                            autoFocus
+                            margin="dense"
+                            id="pin"
+                            label="PIN"
+                            type="password" // Hides PIN input
+                            fullWidth
+                            variant="standard"
+                            value={pinInput}
+                            onChange={handlePinInputChange}
+                            error={!!pinError}
+                            helperText={pinError}
+                            inputProps={{
+                                maxLength: 4,
+                                inputMode: 'numeric',
+                                pattern: '[0-9]*',
+                                style: { textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.5em' }
+                            }}
+                            sx={{my:2}}
+                        />
+                    </DialogContent>
+                    <DialogActions>
+                        {pinAction !== 'unlock' && <Button onClick={handleClosePinModal} disabled={saving}>Cancel</Button>}
+                        <Button onClick={handleSubmitPin} disabled={saving || pinInput.length !== 4}>
+                            {saving ? <CircularProgress size={24} /> : (pinAction === 'unlock' ? "Unlock" : "Submit")}
+                        </Button>
+                    </DialogActions>
+                </Dialog>
+
 
                 {/* Delete Entry Confirmation Dialog */}
                 <Dialog
@@ -1464,7 +1796,7 @@ function App() {
                     autoHideDuration={ALERT_TIMEOUT_DURATION}
                     onClose={handleCloseStatus}
                     anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-                    sx={{ mt: {xs: 7, sm: 8} }}
+                    sx={{ mt: { xs: 7, sm: 8 } }}
                 >
                     <MuiAlert
                         onClose={handleCloseStatus}
