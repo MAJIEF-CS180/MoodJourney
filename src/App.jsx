@@ -40,6 +40,7 @@ function App() {
     const [flashColor, setFlashColor] = useState(null);
     const [showAllEntriesInDrawer, setShowAllEntriesInDrawer] = useState(false);
     const [isDictating, setIsDictating] = useState(false);
+    const [isFileDictating, setIsFileDictating] = useState(false);
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [entryToDelete, setEntryToDelete] = useState(null);
     const [isPinSet, setIsPinSet] = useState(false);
@@ -54,6 +55,7 @@ function App() {
     const [globalBackgroundImageUrl, setGlobalBackgroundImageUrl] = useState(null);
     const [activeMonetColor, setActiveMonetColor] = useState(null);
     const [isMonetActiveForView, setIsMonetActiveForView] = useState(false);
+    const [recognitionInstance, setRecognitionInstance] = useState(null);
 
     const muiTheme = useMemo(() => {
         const baseThemeObject = themeMode === 'girlboss' ? girlbossTheme : (isDarkModeActive ? darkTheme : lightTheme);
@@ -284,24 +286,149 @@ function App() {
     };
 
     const handleStartDictation = async () => {
-        let selectedPath = null;
+        if (!navigator.onLine) {
+            setStatus({ message: "Error getting response: Failed to get response from MoodJourney: Network request to Web Speech API failed", severity: "error" });
+            setIsDictating(false);
+            return;
+        }
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        if (!SpeechRecognition) {
+            setStatus({ message: "Speech recognition is not supported by your browser.", severity: "error" });
+            return;
+        }
+
+        if (isDictating && recognitionInstance) {
+            recognitionInstance.stop();
+            return;
+        }
+        
+        if (!isDictating) {
+            const recognition = new SpeechRecognition();
+            setRecognitionInstance(recognition);
+
+            recognition.lang = 'en-US';
+            recognition.interimResults = true;
+            recognition.continuous = true; 
+
+            let finalTranscriptAggregator = entryText;
+
+            recognition.onstart = () => {
+                setIsDictating(true);
+                setStatus({ message: "Listening...", severity: "info" });
+            };
+
+            recognition.onresult = (event) => {
+                let interimTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        const transcriptChunk = event.results[i][0].transcript;
+                        finalTranscriptAggregator = finalTranscriptAggregator.trim() ? `${finalTranscriptAggregator.trim()} ${transcriptChunk.trim()}` : transcriptChunk.trim();
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+                setEntryText(finalTranscriptAggregator + interimTranscript);
+            };
+
+            recognition.onerror = (event) => {
+                setIsDictating(false);
+                setRecognitionInstance(null);
+                let errorMessage = "Speech recognition error";
+
+                if (!navigator.onLine) {
+                    errorMessage = "Error getting response: Failed to get response from MoodJourney: Network request to Web Speech API failed";
+                } else if (event.error) {
+                    if (event.error === 'network') {
+                        errorMessage = "Error: A network issue occurred with the speech service. Please check your internet connection.";
+                    } else if (event.error === 'no-speech') {
+                        errorMessage = "No speech was detected. Please try again.";
+                    } else if (event.error === 'audio-capture') {
+                        errorMessage = "Audio capture failed. Ensure microphone is enabled and permissions are granted.";
+                    } else if (event.error === 'not-allowed') {
+                        errorMessage = "Microphone access or speech service denied. Please check permissions.";
+                    } else {
+                        errorMessage += `: ${event.error}`;
+                    }
+                }
+                setStatus({ message: errorMessage, severity: "error" });
+            };
+
+            recognition.onend = () => {
+                setIsDictating(false);
+                setRecognitionInstance(null);
+                setEntryText(prev => finalTranscriptAggregator || prev);
+                if (status.severity !== 'error' || status.message !== "Error: no internet connection") {
+                     setStatus(prevStatus => {
+                        if (prevStatus.severity === 'error' && prevStatus.message.includes("Error:")) {
+                            return prevStatus;
+                        }
+                        return { message: "Dictation finished.", severity: "success" };
+                    });
+                }
+            };
+
+            try {
+                // await navigator.mediaDevices.getUserMedia({ audio: true });
+                recognition.start();
+            } catch (err) {
+                 setIsDictating(false);
+                 setRecognitionInstance(null);
+                 if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                    setStatus({ message: "Microphone access denied. Please allow microphone permissions.", severity: "error" });
+                 } else if (!navigator.onLine) {
+                    setStatus({ message: "Error: no internet connection. Cannot access microphone.", severity: "error" });
+                 }
+                 else {
+                    setStatus({ message: "Could not access microphone. Please check connection and permissions.", severity: "error" });
+                 }
+                 console.error("Error accessing/starting microphone for SpeechRecognition:", err);
+            }
+        }
+    };
+
+    const handleFileUpload = async () => {
         try {
-            const { open } = await import('@tauri-apps/plugin-dialog');
-            selectedPath = await open({ title: "Select Audio File", multiple: false, filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'm4a', 'flac', 'ogg'] }] });
-            selectedPath = Array.isArray(selectedPath) ? selectedPath[0] : selectedPath;
-        } catch (dialogError) { setStatus({ message: `Could not open file dialog: ${dialogError.message || String(dialogError)}`, severity: "error" }); return; }
-        if (!selectedPath) { setStatus({ message: "Dictation cancelled: No audio file selected.", severity: "info" }); return; }
-        setIsDictating(true); setStatus({ message: "Transcribing audio...", severity: "info" });
-        try {
-            const transcribedText = await invoke("perform_dictation_cmd", { audioFilePath: selectedPath });
-            setEntryText(prev => prev.trim() ? `${prev.trim()} ${transcribedText}` : transcribedText);
-            setStatus({ message: "Dictation successful!", severity: "success" });
+            const { open: openDialog } = await import('@tauri-apps/plugin-dialog');
+
+            const selectedPath = await openDialog({
+                title: "Select Audio File for Dictation",
+                multiple: false,
+                filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'm4a', 'flac', 'ogg'] }]
+            });
+
+            if (selectedPath && typeof selectedPath === 'string') {
+                setStatus({ message: "Transcribing uploaded audio file, this may take a moment...", severity: "info" });
+                setIsFileDictating(true); 
+
+                const transcribedText = await invoke("perform_dictation_cmd", { audioFilePath: selectedPath });
+                
+                setEntryText(prev => prev.trim() ? `${prev.trim()} ${transcribedText.trim()}` : transcribedText.trim());
+                setStatus({ message: "Uploaded audio transcribed successfully!", severity: "success" });
+            } else if (selectedPath === null) {
+                setStatus({ message: "Audio file selection cancelled.", severity: "info" });
+            }
         } catch (err) {
-            let errMsg = `Dictation failed: ${err.message || String(err)}`;
-            if (String(err).includes("Unsupported audio sample rate")) errMsg = "Dictation failed: Unsupported audio sample rate (16kHz required).";
-            else if (String(err).includes("Unsupported audio channel count")) errMsg = "Dictation failed: Unsupported audio channel count (mono required).";
-            setStatus({ message: errMsg, severity: "error" });
-        } finally { setIsDictating(false); }
+            console.error("Error during file upload dictation:", err);
+            let errorMessage = "Failed to transcribe audio file.";
+            if (typeof err === 'string') {
+                if (err.includes("Failed to load dictation model")) {
+                    errorMessage = "Error: Could not load the transcription model.";
+                } else if (err.includes("Unsupported audio sample rate")) {
+                    errorMessage = "Dictation failed: Unsupported audio sample rate (16kHz required).";
+                } else if (err.includes("Unsupported audio channel count")) {
+                    errorMessage = "Dictation failed: Unsupported audio channel count (mono required).";
+                } else {
+                    errorMessage = err;
+                }
+            } else if (err.message) { 
+                errorMessage = err.message;
+            }
+            setStatus({ message: errorMessage, severity: "error" });
+        } finally {
+            setIsFileDictating(false); 
+        }
     };
 
     const handleSaveEntry = async () => {
@@ -610,8 +737,10 @@ function App() {
                     entryText={entryText}
                     onEntryTextChange={setEntryText}
                     onSaveEntry={handleSaveEntry}
+                    onUploadAudioFile={handleFileUpload}
                     onStartDictation={handleStartDictation}
                     isDictating={isDictating}
+                    isFileDictating={isFileDictating}
                     saving={saving}
                     getGreeting={getGreeting}
                 />;

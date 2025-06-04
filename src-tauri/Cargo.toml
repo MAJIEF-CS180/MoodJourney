@@ -27,7 +27,7 @@ tauri-plugin-opener = "2.0.0"
 tauri-plugin-dialog = "2.2.1"
 chrono = "0.4"
 rust-bert = "0.23.0"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 anyhow = "1.0"
 whisper-rs = "0.14.2"
 hound = "3.5.1"

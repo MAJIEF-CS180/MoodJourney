@@ -488,7 +488,7 @@ fn main() {
             app.manage(AppEmotionModel(Arc::new(safe_emotion_model_wrapper)));
             println!("[main.rs] EmotionModel initialized and managed.");
 
-            let dictation_model_name = "ggml-base.en.bin";
+            let dictation_model_name = "ggml-tiny.en-q5_1.bin";
             log::info!("[main.rs] Attempting to load dictation model: {}", dictation_model_name);
             let dictation_model_instance = DictationModel::new(&app_handle, dictation_model_name)
                 .expect("CRITICAL: Failed to initialize DictationModel. Check model file and paths.");
