@@ -1,24 +1,20 @@
 use serde::Deserialize;
 use serde_json::json;
 use anyhow::{Result, anyhow};
-
-// IMPORTANT: Replace "YOUR_GEMINI_API_KEY" with your actual Gemini API key.
-// Consider loading this from an environment variable or a config file for better security.
-const GEMINI_API_KEY: &str = "YOUR_GEMINI_API_KEY";
+use crate::config::GEMINI_API_KEY;
 const GEMINI_API_URL_BASE: &str = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
 
 #[derive(Deserialize, Debug)]
 struct GeminiCandidate {
     content: GeminiContent,
     #[serde(rename = "finishReason")]
-    _finish_reason: Option<String>, // Changed here
-    // safetyRatings, etc., can be added if needed
+    _finish_reason: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
 struct GeminiContent {
     parts: Vec<GeminiPart>,
-    _role: Option<String>, // Changed here
+    _role: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -30,13 +26,13 @@ struct GeminiPart {
 struct GeminiResponse {
     candidates: Vec<GeminiCandidate>,
     #[serde(rename = "promptFeedback")]
-    _prompt_feedback: Option<serde_json::Value>, // Changed here
+    _prompt_feedback: Option<serde_json::Value>,
 }
 
 pub async fn generate_suggestion_via_api(prompt: &str) -> Result<String> {
-    if GEMINI_API_KEY == "YOUR_GEMINI_API_KEY" {
-        log::error!("[API Suggestion] Gemini API key is not configured.");
-        return Err(anyhow!("API_KEY_NOT_CONFIGURED: The Gemini API key is not set in the Rust code."));
+    if GEMINI_API_KEY == "YOUR_GEMINI_API_KEY_GOES_HERE" {
+        log::error!("[API Suggestion] Gemini API key is not configured in src-tauri/src/config.rs. Please follow instructions in src-tauri/src/config_template.rs.");
+        return Err(anyhow!("API_KEY_NOT_CONFIGURED: The Gemini API key is not set in src-tauri/src/config.rs. Please follow instructions in src-tauri/src/config_template.rs."));
     }
     if prompt.trim().is_empty() {
         return Err(anyhow!("Prompt cannot be empty."));
@@ -49,11 +45,11 @@ pub async fn generate_suggestion_via_api(prompt: &str) -> Result<String> {
         "contents": [{
             "parts": [{"text": prompt}]
         }],
-        "generationConfig": { // Optional: Adjust these as needed
+        "generationConfig": {
             "temperature": 0.7,
             "topP": 0.9,
             "topK": 40,
-            "maxOutputTokens": 150, // Increased token limit for potentially longer suggestions
+            "maxOutputTokens": 150,
         }
     });
 
@@ -106,16 +102,16 @@ pub async fn generate_suggestion_via_api(prompt: &str) -> Result<String> {
 }
 
 pub async fn generate_chat_response_via_api(api_contents: &Vec<serde_json::Value>) -> Result<String> {
-    if GEMINI_API_KEY == "YOUR_GEMINI_API_KEY" { //
-        log::error!("[API Chat] Gemini API key is not configured.");
-        return Err(anyhow!("API_KEY_NOT_CONFIGURED: The Gemini API key is not set."));
+    if GEMINI_API_KEY == "YOUR_GEMINI_API_KEY_GOES_HERE" {
+        log::error!("[API Chat] Gemini API key is not configured in src-tauri/src/config.rs. Please follow instructions in src-tauri/src/config_template.rs.");
+        return Err(anyhow!("API_KEY_NOT_CONFIGURED: The Gemini API key is not set in src-tauri/src/config.rs. Please follow instructions in src-tauri/src/config_template.rs."));
     }
     if api_contents.is_empty() {
         return Err(anyhow!("Chat contents for API cannot be empty."));
     }
 
     let client = reqwest::Client::new();
-    let api_url = format!("{}?key={}", GEMINI_API_URL_BASE, GEMINI_API_KEY); //
+    let api_url = format!("{}?key={}", GEMINI_API_URL_BASE, GEMINI_API_KEY);
 
     let request_body = json!({
         "contents": api_contents,

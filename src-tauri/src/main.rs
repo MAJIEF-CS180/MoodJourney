@@ -5,6 +5,7 @@ mod dictation;
 mod emotion;
 mod suggestion;
 mod password;
+mod config;
 
 use std::fs;
 use std::io::Write; 
