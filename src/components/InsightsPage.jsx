@@ -426,7 +426,7 @@ function InsightsPage({ entries, onBack, handleEntrySelect }) {
                                 </Typography>
                                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 'auto' }}>
                                     <Button
-                                        variant="outlined"
+                                        variant="contained"
                                         size="small"
                                         startIcon={<ArticleIcon />}
                                         onClick={() => {
@@ -435,14 +435,6 @@ function InsightsPage({ entries, onBack, handleEntrySelect }) {
                                         }}
                                     >
                                         View Entry
-                                    </Button>
-                                    <Button
-                                        variant="outlined"
-                                        size="small"
-                                        startIcon={<AutoAwesomeIcon />}
-                                        onClick={() => console.log("Talk to Assistant for:", selectedInsightEntry.date)}
-                                    >
-                                        Talk to Assistant
                                     </Button>
                                 </Box>
                             </Paper>
