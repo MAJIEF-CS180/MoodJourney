@@ -84,7 +84,72 @@ fn get_entry(date: &str) -> Result<Option<Entry>, String> {
 
 // update a specific entry by date
 #[command]
-fn update_entry(date: &str, new_title: &str, new_content: Option<&str>, new_password: Option<&str>, new_image: Option<&str>) -> Result<(), String> {
+fn update_entry(
+    app_handle: AppHandle,
+    date: &str,
+    new_title: &str,
+    new_content: Option<&str>,
+    new_password: Option<&str>,
+    new_image: Option<&str>,
+) -> Result<(), String> {
+    match get_entry_by_date(date) {
+        Ok(Some(current_entry)) => {
+            if let Some(old_image_relative_path) = current_entry.image {
+                if !old_image_relative_path.is_empty() {
+                    let mut delete_old_image = false;
+                    match new_image {
+                        Some(new_image_path_str) => {
+                            if new_image_path_str != old_image_relative_path || new_image_path_str.is_empty() {
+                                delete_old_image = true;
+                            }
+                        }
+                        None => {}
+                    }
+
+                    if delete_old_image {
+                        match app_handle.path().app_local_data_dir() {
+                            Ok(app_data_dir) => {
+                                let full_old_image_path = app_data_dir.join(&old_image_relative_path);
+                                if full_old_image_path.exists() {
+                                    if let Err(e) = fs::remove_file(&full_old_image_path) {
+                                        eprintln!(
+                                            "Failed to delete old image file {:?} during update: {}",
+                                            full_old_image_path, e
+                                        );
+                                    }
+                                    else {
+                                        println!(
+                                            "Successfully deleted old image file during update: {:?}",
+                                            full_old_image_path
+                                        );
+                                    }
+                                }
+                                else {
+                                     println!(
+                                        "Old image file not found (no need to delete during update): {:?}",
+                                        full_old_image_path
+                                     );
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!(
+                                    "Error getting app local data dir for old image deletion during update: {}",
+                                    e
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(None) => {
+            eprintln!("Entry with date '{}' not found for update.", date);
+        }
+        Err(e) => {
+            eprintln!("Failed to fetch current entry for date '{}' during update: {}", date, e);
+        }
+    }
+
     update_entry_by_date(date, new_title, new_content, new_password, new_image).map_err(|e| e.to_string())
 }
 

@@ -224,8 +224,8 @@ function AssistantPage({ theme, setStatus, onBack }) {
     return (
         <>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexShrink: 0 }}>
-                <Button startIcon={<ArrowBackIcon />} onClick={onBack} variant="outlined">Back to Journal</Button>
-                <Button startIcon={<AddIcon />} onClick={handleNewChatClick} variant="outlined">New Chat</Button>
+                <Button startIcon={<ArrowBackIcon />} onClick={onBack} variant="contained">Back to Journal</Button>
+                <Button startIcon={<AddIcon />} onClick={handleNewChatClick} variant="contained">New Chat</Button>
             </Box>
             <Box sx={{
                 display: 'flex',

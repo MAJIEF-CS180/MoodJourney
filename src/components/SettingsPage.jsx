@@ -78,7 +78,7 @@ function SettingsPage({
     return (
         <>
             <Box sx={{ mb: 2, alignSelf: 'flex-start', flexShrink: 0 }}>
-                <Button startIcon={<ArrowBackIcon />} onClick={onBack} variant="outlined">Back to Journal</Button>
+                <Button startIcon={<ArrowBackIcon />} onClick={onBack} variant="contained">Back to Journal</Button>
             </Box>
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, width: '100%', flexGrow: 1, overflow: 'hidden' }}>
                 <Paper sx={{ p: 1, flex: { xs: '1 1 auto', md: '2 1 0%' }, minWidth: 0, borderRadius: '16px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>

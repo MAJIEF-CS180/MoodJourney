@@ -35,12 +35,22 @@ export const parseSuggestions = (suggestionText) => {
         return [noSuggestionsText, noSuggestionsText, noSuggestionsText];
     }
 
-    let suggestions = suggestionText.split("\n\n").map(s => s.trim()).filter(Boolean);
+    const formatSuggestion = (s) => {
+        const trimmed = s.trim();
+        if (trimmed.startsWith('- ')) {
+            return trimmed.substring(2);
+        }
+        return trimmed;
+    };
+
+    let suggestions = suggestionText.split("\n\n").map(formatSuggestion).filter(Boolean);
 
     if (suggestions.length === 1 && suggestions[0].includes("\n")) {
-        const innerSuggestions = suggestions[0].split("\n").map(s => s.trim()).filter(Boolean);
-        if (innerSuggestions.length > 1) {
-            suggestions = innerSuggestions;
+        const innerSuggestions = suggestionText.split("\n").map(formatSuggestion).filter(Boolean);
+        if (innerSuggestions.length > 1 && innerSuggestions.length <= 3) {
+             suggestions = innerSuggestions;
+        } else if (suggestions.length === 1) {
+            suggestions = suggestionText.split('\n').map(formatSuggestion).filter(Boolean);
         }
     }
 

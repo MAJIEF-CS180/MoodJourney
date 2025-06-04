@@ -65,11 +65,59 @@ export const baseThemeOptions = {
     components: {
         MuiButton: { defaultProps: { disableElevation: true }, styleOverrides: { root: { textTransform: 'none', borderRadius: 20 }, contained: { borderRadius: 20 } } },
         MuiTextField: { defaultProps: { variant: 'filled' }, styleOverrides: { root: ({ theme }) => ({ '& .MuiFilledInput-underline:before, & .MuiFilledInput-underline:after, & .MuiFilledInput-underline:hover:not(.Mui-disabled):before': { borderBottom: 'none' }, '& .MuiFilledInput-root': { backgroundColor: theme.palette.action.hover, borderRadius: '4px', '&:hover, &.Mui-focused': { backgroundColor: theme.palette.action.selected } } }) } },
-        MuiPaper: { defaultProps: { elevation: 0 }, styleOverrides: { root: ({ theme }) => ({ backgroundColor: theme.palette.background.paper, border: `1px solid ${theme.palette.divider}` }) } },
-        MuiDrawer: { styleOverrides: { paper: ({ theme }) => ({ backgroundColor: theme.palette.background.paper, borderRight: `1px solid ${theme.palette.divider}` }) } },
-        MuiAppBar: { defaultProps: { elevation: 0 }, styleOverrides: { root: ({ theme }) => ({ backgroundColor: theme.palette.background.paper, color: theme.palette.text.primary, borderBottom: `1px solid ${theme.palette.divider}` }) } },
+        MuiPaper: {
+            defaultProps: { elevation: 0 },
+            styleOverrides: {
+                root: ({ theme }) => ({
+                    backgroundColor: alpha(theme.palette.background.paper, 0.5), 
+                    backdropFilter: 'blur(10px)',
+                    WebkitBackdropFilter: 'blur(10px)',
+                    border: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
+                }),
+            },
+        },
+        MuiDrawer: {
+            styleOverrides: {
+                paper: ({ theme }) => ({
+                    backgroundColor: alpha(theme.palette.background.paper, 0.5),
+                    backdropFilter: 'blur(10px)',
+                    WebkitBackdropFilter: 'blur(10px)',
+                    borderRight: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
+                }),
+            },
+        },
+        MuiAppBar: {
+            defaultProps: { elevation: 0 },
+            styleOverrides: {
+                root: ({ theme }) => ({
+                    backgroundColor: alpha(theme.palette.background.paper, 0.5),
+                    backdropFilter: 'blur(10px)',
+                    WebkitBackdropFilter: 'blur(10px)',
+                    color: theme.palette.text.primary,
+                    borderBottom: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
+                }),
+            },
+        },
         MuiAlert: { styleOverrides: { root: { borderRadius: '8px' }, standardSuccess: ({ theme }) => ({ color: theme.palette.primary.main, backgroundColor: alpha(theme.palette.primary.main, theme.palette.mode === 'light' ? 0.12 : 0.18), '& .MuiAlert-icon': { color: theme.palette.primary.main } }), standardError: ({ theme }) => ({ color: theme.palette.error.main, backgroundColor: alpha(theme.palette.error.main, theme.palette.mode === 'light' ? 0.12 : 0.18), '& .MuiAlert-icon': { color: theme.palette.error.main } }), standardWarning: ({ theme }) => ({ color: theme.palette.mode === 'light' ? theme.palette.warning.dark : theme.palette.warning.light, backgroundColor: alpha(theme.palette.warning.main, theme.palette.mode === 'light' ? 0.12 : 0.18), '& .MuiAlert-icon': { color: theme.palette.mode === 'light' ? theme.palette.warning.dark : theme.palette.warning.light } }), standardInfo: ({ theme }) => ({ color: theme.palette.info.main, backgroundColor: alpha(theme.palette.info.main, theme.palette.mode === 'light' ? 0.12 : 0.18), '& .MuiAlert-icon': { color: theme.palette.info.main } }) } },
-        MuiSelect: { styleOverrides: { root: ({ theme }) => ({}) } }
+        MuiSelect: { styleOverrides: { root: ({ theme }) => ({}) } },
+        MuiBackdrop: {
+            styleOverrides: {
+                root: ({ theme }) => ({
+                    backgroundColor: alpha(theme.palette.common.black, 0.3),
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
+                }),
+            },
+        },
+        MuiCard: {
+            styleOverrides: {
+                root: ({ theme }) => ({
+                    backgroundColor: alpha(theme.palette.background.paper, 0.5),
+                    backdropFilter: 'blur(10px)',
+                    WebkitBackdropFilter: 'blur(10px)',
+                }),
+            },
+        },
     }
 };
 
@@ -179,9 +227,12 @@ export const girlbossTheme = createTheme({
                         : baseThemeOptions.components.MuiAppBar?.styleOverrides?.root;
                     return {
                         ...base,
-                        backgroundColor: theme.palette.primary.main,
+                        backgroundColor: alpha(theme.palette.primary.main, 0.75), 
+                        backdropFilter: 'blur(10px)', 
+                        WebkitBackdropFilter: 'blur(10px)',
                         color: '#4A3B00',
                         boxShadow: `0 2px 8px ${alpha(theme.palette.common.black, 0.3)}, 0 0 12px ${alpha(theme.palette.primary.main, 0.6)} inset`,
+                        borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
                     };
                 }
             }
@@ -196,10 +247,33 @@ export const girlbossTheme = createTheme({
                         : baseThemeOptions.components.MuiDrawer?.styleOverrides?.paper;
                     return {
                         ...base,
-                        backgroundColor: '#FFB6C1',
-                        borderRight: `2px dashed ${theme.palette.primary.main}`
+                        backgroundColor: alpha('#FFB6C1', 0.75), 
+                        backdropFilter: 'blur(10px)', 
+                        WebkitBackdropFilter: 'blur(10px)',
+                        borderRight: `2px dashed ${alpha(theme.palette.primary.main, 0.5)}`
                     };
                 }
+            }
+        },
+        MuiCard: {
+            ...baseThemeOptions.components.MuiCard,
+            styleOverrides: {
+                ...baseThemeOptions.components.MuiCard?.styleOverrides,
+                 root: ({theme, ...ownerState}) => {
+                     const base = typeof baseThemeOptions.components.MuiCard?.styleOverrides?.root === 'function'
+                        ? baseThemeOptions.components.MuiCard.styleOverrides.root({theme, ...ownerState})
+                        : baseThemeOptions.components.MuiCard?.styleOverrides?.root;
+                    return {
+                        ...base,
+                        backgroundColor: alpha(theme.palette.background.paper, 0.75), 
+                        backdropFilter: 'blur(10px)', 
+                        WebkitBackdropFilter: 'blur(10px)',
+                        borderLeftWidth: '5px',
+                        borderLeftStyle: 'solid',
+                        borderLeftColor: theme.palette.primary.main,
+                        boxShadow: `2px 2px 8px ${alpha(theme.palette.common.black, 0.15)}`,
+                    };
+                 }
             }
         },
         MuiListItemText: {
@@ -278,7 +352,7 @@ export const girlbossTheme = createTheme({
                 }
             }
         },
-        MuiPaper: {
+        MuiPaper: { 
             ...baseThemeOptions.components.MuiPaper,
             styleOverrides: {
                 ...baseThemeOptions.components.MuiPaper?.styleOverrides,
@@ -287,29 +361,11 @@ export const girlbossTheme = createTheme({
                         ? baseThemeOptions.components.MuiPaper.styleOverrides.root({theme, ...ownerState})
                         : baseThemeOptions.components.MuiPaper?.styleOverrides?.root;
                     return {
-                        ...base,
-                        border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
+                        ...base, 
+                        border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`, 
                         boxShadow: `0 0 5px ${alpha(theme.palette.primary.main, 0.1)}`,
                     };
                 },
-            }
-        },
-        MuiCard: {
-            ...baseThemeOptions.components.MuiCard,
-            styleOverrides: {
-                ...baseThemeOptions.components.MuiCard?.styleOverrides,
-                 root: ({theme, ...ownerState}) => {
-                     const base = typeof baseThemeOptions.components.MuiCard?.styleOverrides?.root === 'function'
-                        ? baseThemeOptions.components.MuiCard.styleOverrides.root({theme, ...ownerState})
-                        : baseThemeOptions.components.MuiCard?.styleOverrides?.root;
-                    return {
-                        ...base,
-                        borderLeftWidth: '5px',
-                        borderLeftStyle: 'solid',
-                        borderLeftColor: theme.palette.primary.main,
-                        boxShadow: `2px 2px 8px ${alpha(theme.palette.common.black, 0.15)}`,
-                    };
-                 }
             }
         },
         MuiSelect: {

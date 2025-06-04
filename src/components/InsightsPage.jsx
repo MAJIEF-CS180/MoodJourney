@@ -177,10 +177,10 @@ function InsightsPage({ entries, onBack, handleEntrySelect }) {
     return (
         <>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexShrink: 0 }}>
-                <Button startIcon={<ArrowBackIcon />} onClick={onBack} variant="outlined">Back to Journal</Button>
+                <Button startIcon={<ArrowBackIcon />} onClick={onBack} variant="contained">Back to Journal</Button>
                 <Box>
-                    <Button onClick={() => setInsightsViewMode("Informative")} variant={insightsViewMode === 'Informative' ? 'contained' : 'outlined'} startIcon={<InfoIcon />} sx={{ mr: 1 }}>Informative</Button>
-                    <Button onClick={() => setInsightsViewMode("Visual")} variant={insightsViewMode === 'Visual' ? 'contained' : 'outlined'} startIcon={<VisibilityIcon />}>Visual</Button>
+                    <Button onClick={() => setInsightsViewMode("Informative")} variant={insightsViewMode === 'Informative' ? 'contained' : 'contained'} startIcon={<InfoIcon />} sx={{ mr: 1 }}>Informative</Button>
+                    <Button onClick={() => setInsightsViewMode("Visual")} variant={insightsViewMode === 'Visual' ? 'contained' : 'contained'} startIcon={<VisibilityIcon />}>Visual</Button>
                 </Box>
             </Box>
 

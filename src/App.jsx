@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { invoke } from "@tauri-apps/api/core";
-import { ThemeProvider, CssBaseline, Box, Toolbar, Typography, Snackbar, Alert as MuiAlert, CircularProgress } from '@mui/material';
+import { ThemeProvider, CssBaseline, Box, Toolbar, Typography, Snackbar, Alert as MuiAlert, CircularProgress, createTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import MenuIcon from '@mui/icons-material/Menu';
 import IconButton from '@mui/material/IconButton';
@@ -19,6 +19,7 @@ import JournalEntryView from './components/JournalEntryView';
 import NewEntryForm from './components/NewEntryForm';
 import PinModal from './components/PinModal';
 import ConfirmationDialog from './components/ConfirmationDialog';
+import ImageUploadModal from './components/ImageUploadModal';
 
 function App() {
     const [themeMode, setThemeMode] = useState(() => localStorage.getItem('appThemeMode') || 'system');
@@ -41,26 +42,102 @@ function App() {
     const [isDictating, setIsDictating] = useState(false);
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [entryToDelete, setEntryToDelete] = useState(null);
-
     const [isPinSet, setIsPinSet] = useState(false);
     const [showPinModal, setShowPinModal] = useState(false);
     const [pinInput, setPinInput] = useState("");
     const [pinError, setPinError] = useState("");
     const [pinAction, setPinAction] = useState("");
     const [isAppLocked, setIsAppLocked] = useState(true);
-
+    const [imageUploadModalOpen, setImageUploadModalOpen] = useState(false);
+    const [entryForImageUpload, setEntryForImageUpload] = useState(null);
     const [expandedSuggestionIndices, setExpandedSuggestionIndices] = useState([]);
+    const [globalBackgroundImageUrl, setGlobalBackgroundImageUrl] = useState(null);
+    const [activeMonetColor, setActiveMonetColor] = useState(null);
+    const [isMonetActiveForView, setIsMonetActiveForView] = useState(false);
 
     const muiTheme = useMemo(() => {
-        if (themeMode === 'girlboss') return girlbossTheme;
-        return isDarkModeActive ? darkTheme : lightTheme;
-    }, [isDarkModeActive, themeMode]);
+        const baseThemeObject = themeMode === 'girlboss' ? girlbossTheme : (isDarkModeActive ? darkTheme : lightTheme);
+
+        if (isMonetActiveForView && activeMonetColor && themeMode !== 'girlboss') {
+            const monetPaletteAdditions = {
+                palette: {
+                    monet: {
+                        main: activeMonetColor,
+                        backgroundCard: alpha(activeMonetColor, baseThemeObject.palette.mode === 'light' ? 0.08 : 0.12),
+                        borderCard: alpha(activeMonetColor, 0.5),
+                        textTitle: baseThemeObject.palette.mode === 'light' ? activeMonetColor : alpha(activeMonetColor, 0.9),
+                        icon: activeMonetColor,
+                        contrastText: baseThemeObject.palette.getContrastText ? baseThemeObject.palette.getContrastText(activeMonetColor) : (baseThemeObject.palette.mode === 'light' ? '#000' : '#fff'),
+                    }
+                }
+            };
+
+            const existingMonetComponentOverrides = { components: {} };
+            const basePaperStyleFn = baseThemeObject.components?.MuiPaper?.styleOverrides?.root;
+            const baseAppBarStyleFn = baseThemeObject.components?.MuiAppBar?.styleOverrides?.root;
+            const baseDrawerStyleFn = baseThemeObject.components?.MuiDrawer?.styleOverrides?.paper;
+
+            if (baseThemeObject.palette.mode === 'light') {
+                existingMonetComponentOverrides.components.MuiPaper = {
+                    styleOverrides: {
+                        root: (params) => {
+                            const defaultStyle = typeof basePaperStyleFn === 'function' ? basePaperStyleFn(params) : (basePaperStyleFn || {});
+                            return {
+                                ...defaultStyle,
+                                borderColor: alpha(activeMonetColor, 0.5),
+                            };
+                        }
+                    }
+                };
+            } else {
+                existingMonetComponentOverrides.components.MuiAppBar = {
+                    styleOverrides: {
+                        root: (params) => {
+                            const baseStyle = typeof baseAppBarStyleFn === 'function' ? baseAppBarStyleFn(params) : (baseAppBarStyleFn || {});
+                            const existingAlpha = parseFloat(String(baseStyle.backgroundColor).match(/[\d\.]+(?=\)?$)/)?.[0] || 0.75);
+                            return {
+                                ...baseStyle,
+                                backgroundColor: alpha(activeMonetColor, existingAlpha)
+                            };
+                        }
+                    }
+                };
+                existingMonetComponentOverrides.components.MuiDrawer = {
+                    styleOverrides: {
+                        paper: (params) => {
+                            const baseStyle = typeof baseDrawerStyleFn === 'function' ? baseDrawerStyleFn(params) : (baseDrawerStyleFn || {});
+                            const existingAlpha = parseFloat(String(baseStyle.backgroundColor).match(/[\d\.]+(?=\)?$)/)?.[0] || 0.75);
+                            return {
+                                ...baseStyle,
+                                backgroundColor: alpha(activeMonetColor, existingAlpha)
+                            };
+                        }
+                    }
+                };
+                existingMonetComponentOverrides.components.MuiPaper = {
+                    styleOverrides: {
+                        root: (params) => {
+                            const baseStyle = typeof basePaperStyleFn === 'function' ? basePaperStyleFn(params) : (basePaperStyleFn || {});
+                            const existingAlpha = parseFloat(String(baseStyle.backgroundColor).match(/[\d\.]+(?=\)?$)/)?.[0] || 0.5);
+                            return {
+                                ...baseStyle,
+                                backgroundColor: alpha(activeMonetColor, Math.max(existingAlpha, 0.15)),
+                                borderColor: alpha(activeMonetColor, 0.5)
+                            };
+                        }
+                    }
+                };
+            }
+            let themeWithMonetPalette = createTheme(baseThemeObject, monetPaletteAdditions);
+            return createTheme(themeWithMonetPalette, existingMonetComponentOverrides);
+        }
+        return createTheme(baseThemeObject);
+    }, [themeMode, isDarkModeActive, activeMonetColor, isMonetActiveForView]);
 
     const checkPinStatus = useCallback(async () => {
         try {
             const pinIsCurrentlySet = await invoke('is_pin_set_cmd');
             setIsPinSet(pinIsCurrentlySet);
-
             if (pinIsCurrentlySet) {
                 const appIsLocked = await invoke('is_locked');
                 if (appIsLocked) {
@@ -80,15 +157,13 @@ function App() {
         }
     }, []);
 
-
     useEffect(() => {
-        window.refreshPinStatus = checkPinStatus; // Make it globally accessible
-        checkPinStatus(); // Initial check
+        window.refreshPinStatus = checkPinStatus;
+        checkPinStatus();
         return () => {
             delete window.refreshPinStatus;
         };
     }, [checkPinStatus]);
-
 
     useEffect(() => {
         const prefersDarkMQ = window.matchMedia('(prefers-color-scheme: dark)');
@@ -106,16 +181,10 @@ function App() {
     }, [themeMode]);
 
     useEffect(() => { localStorage.setItem('appThemeMode', themeMode); }, [themeMode]);
-
-    useEffect(() => {
-        localStorage.setItem('appConfiguredUserName', configuredUserName);
-    }, [configuredUserName]);
-
+    useEffect(() => { localStorage.setItem('appConfiguredUserName', configuredUserName); }, [configuredUserName]);
 
     const handleCloseStatus = (event, reason) => {
-        if (reason === 'clickaway') {
-            return;
-        }
+        if (reason === 'clickaway') return;
         setStatus({ message: "", severity: "info" });
     };
 
@@ -155,6 +224,64 @@ function App() {
     }, []);
 
     useEffect(() => { if (!isAppLocked) refreshEntriesList(); }, [isAppLocked, refreshEntriesList]);
+
+    const handleOpenImageUploadModal = (entry) => {
+        setEntryForImageUpload(entry);
+        setImageUploadModalOpen(true);
+    };
+
+    const handleCloseImageUploadModal = () => {
+        setImageUploadModalOpen(false);
+        setEntryForImageUpload(null);
+    };
+
+    const handleImageUploadConfirm = async (file) => {
+        if (!entryForImageUpload || !entryForImageUpload.date) {
+            setStatus({ message: "Internal error: No entry context for image upload.", severity: "error" });
+            handleCloseImageUploadModal();
+            return;
+        }
+        if (!file) {
+            setStatus({ message: "No file selected for upload.", severity: "warning" });
+            return;
+        }
+        setSaving(true);
+        try {
+            const reader = new FileReader();
+            const base64String = await new Promise((resolve, reject) => {
+                reader.onload = () => {
+                    const result = reader.result;
+                    if (typeof result === 'string') resolve(result.split(',')[1]);
+                    else reject(new Error("Failed to read file as data URL."));
+                };
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
+            });
+            const newImageRelativePath = await invoke("upload_image_file", {
+                fileDataBase64: base64String,
+                originalFileName: file.name
+            });
+            await invoke("update_entry", {
+                date: entryForImageUpload.date,
+                newTitle: entryForImageUpload.title || "Journal Entry",
+                newContent: entryForImageUpload.content,
+                newPassword: entryForImageUpload.password,
+                newImage: newImageRelativePath
+            });
+            setStatus({ message: "Image uploaded and entry updated successfully!", severity: "success" });
+            handleCloseImageUploadModal();
+            const updatedEntries = await refreshEntriesList();
+            if (selectedEntry && selectedEntry.date === entryForImageUpload.date) {
+                const newlySelectedEntry = updatedEntries.find(entry => entry.date === entryForImageUpload.date);
+                setSelectedEntry(newlySelectedEntry || null);
+            }
+        } catch (error) {
+            console.error("Failed to upload image or update entry:", error);
+            setStatus({ message: `Image upload failed: ${error.message || String(error)}`, severity: "error" });
+        } finally {
+            setSaving(false);
+        }
+    };
 
     const handleStartDictation = async () => {
         let selectedPath = null;
@@ -200,7 +327,12 @@ function App() {
             setEntryText(""); setShowAllEntriesInDrawer(false);
             const updatedEntries = await refreshEntriesList();
             const newOrUpdatedEntry = updatedEntries.find(e => e.date === currentDate);
-            if (newOrUpdatedEntry) { setSelectedEntry(newOrUpdatedEntry); setCurrentView('main'); setIsEditingSelectedEntry(false); }
+            if (newOrUpdatedEntry) {
+                setSelectedEntry(newOrUpdatedEntry);
+                setCurrentView('main');
+                setIsEditingSelectedEntry(false);
+                setExpandedSuggestionIndices([0, 1, 2]);
+            }
             else { statusMessage = `Entry ${verb}, but couldn't auto-select. Find it in the list.`; statusSeverity = "info"; }
         } catch (err) { statusMessage = `Failed to ${operation === "create_entry" ? 'save' : 'update'} entry: ${err.message || String(err)}`; statusSeverity = "error"; }
         finally { setStatus({ message: statusMessage, severity: statusSeverity }); setSaving(false); }
@@ -225,7 +357,11 @@ function App() {
             statusSeverity = statusSeverity !== "warning" ? "success" : statusSeverity;
             if (classifiedEmotion && classifiedEmotion.toLowerCase() !== "unknown") { statusMessage += ` Detected Emotion: ${classifiedEmotion.toUpperCase()}`; flashBackground(classifiedEmotion); }
             const updatedEntries = await refreshEntriesList();
-            setSelectedEntry(updatedEntries.find(entry => entry.date === selectedEntry.date) || null);
+            const newlySelectedEntry = updatedEntries.find(entry => entry.date === selectedEntry.date) || null;
+            setSelectedEntry(newlySelectedEntry);
+            if (newlySelectedEntry) {
+                setExpandedSuggestionIndices([0, 1, 2]);
+            }
             setIsEditingSelectedEntry(false); setEditedContentText("");
         } catch (err) { statusMessage = `Failed to update entry: ${err.message || String(err)}`; statusSeverity = "error"; }
         finally { setStatus({ message: statusMessage, severity: statusSeverity }); setSaving(false); }
@@ -277,7 +413,6 @@ function App() {
         }
     };
 
-
     const handleDrawerOpen = () => setDrawerOpen(true);
     const handleDrawerClose = () => setDrawerOpen(false);
     const handleDrawerHoverOpen = () => !drawerOpen && setHoverOpen(true);
@@ -291,7 +426,7 @@ function App() {
         setStatus({ message: "", severity: "info" });
         setLastDetectedEmotion("");
         setCurrentView('main');
-        setExpandedSuggestionIndices([]);
+        setExpandedSuggestionIndices([0, 1, 2]);
     };
     const handleNewEntryClick = () => {
         setSelectedEntry(null);
@@ -373,7 +508,6 @@ function App() {
         }
         setPinError("");
         setSaving(true);
-
         try {
             if (pinAction === 'create' || pinAction === 'change') {
                 await invoke('set_new_password', { password: pinInput });
@@ -408,7 +542,15 @@ function App() {
         setShowPinModal(true);
         setPinAction('unlock');
     }
-    
+
+    useEffect(() => {
+        if (currentView !== 'main' || !selectedEntry) {
+            setGlobalBackgroundImageUrl(null);
+            setActiveMonetColor(null);
+            setIsMonetActiveForView(false);
+        }
+    }, [currentView, selectedEntry]);
+
     const renderMainContent = () => {
         if (isAppLocked) return <Box sx={{display: 'flex', flexGrow: 1, alignItems: 'center', justifyContent: 'center'}}><CircularProgress /></Box>;
 
@@ -453,6 +595,11 @@ function App() {
                         onBackToNewEntry={handleNewEntryClick}
                         expandedSuggestionIndices={expandedSuggestionIndices}
                         onToggleSuggestionExpand={handleToggleSuggestionExpand}
+                        onTriggerImageUpload={() => handleOpenImageUploadModal(selectedEntry)}
+                        onGlobalBackgroundChange={setGlobalBackgroundImageUrl}
+                        currentThemeMode={themeMode}
+                        setActiveMonetColor={setActiveMonetColor}
+                        setIsMonetActiveForView={setIsMonetActiveForView}
                         deleteConfirmOpen={deleteConfirmOpen}
                         onCloseDeleteConfirm={handleCloseDeleteConfirm}
                         onConfirmDeleteEntry={handleConfirmDeleteEntry}
@@ -474,7 +621,18 @@ function App() {
     return (
         <ThemeProvider theme={muiTheme}>
             <CssBaseline />
-            <Box sx={{ display: 'flex', height: '100vh', bgcolor: flashColor || muiTheme.palette.background.default, transition: 'background-color 0.5s ease' }}>
+            <Box sx={{
+                display: 'flex',
+                height: '100vh',
+                transition: 'background-color 0.5s ease, background-image 0.5s ease',
+                bgcolor: globalBackgroundImageUrl ? 'transparent' : (flashColor || muiTheme.palette.background.default),
+                ...(globalBackgroundImageUrl && {
+                    backgroundImage: `url("${globalBackgroundImageUrl}")`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    backgroundRepeat: 'no-repeat',
+                }),
+            }}>
                 {!isAppLocked && (
                     <>
                         <StyledAppBar position="fixed" isPinnedOpen={drawerOpen}>
@@ -514,7 +672,16 @@ function App() {
                     </>
                 )}
 
-                <Box component="main" sx={{ flexGrow: 1, p: isAppLocked ? 0 : 3, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', height: '100%', overflow: 'hidden' }}>
+                <Box component="main" sx={{
+                    flexGrow: 1,
+                    p: isAppLocked ? 0 : 3,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'flex-start',
+                    height: '100%',
+                    overflow: 'hidden',
+                    bgcolor: 'transparent',
+                }}>
                     {!isAppLocked && <Toolbar />}
                     {renderMainContent()}
                 </Box>
@@ -529,6 +696,15 @@ function App() {
                     onSubmitPin={handleSubmitPin}
                     saving={saving}
                 />
+                {entryForImageUpload && (
+                     <ImageUploadModal
+                        open={imageUploadModalOpen}
+                        onClose={handleCloseImageUploadModal}
+                        currentImagePath={entryForImageUpload?.image}
+                        onConfirmUpload={handleImageUploadConfirm}
+                        savingImage={saving}
+                    />
+                )}
                  <ConfirmationDialog
                     open={deleteConfirmOpen && entryToDelete && (!selectedEntry || entryToDelete?.date !== selectedEntry.date)}
                     onClose={handleCloseDeleteConfirm}
@@ -539,8 +715,6 @@ function App() {
                     confirmButtonColor="error"
                     ConfirmButtonIcon={DeleteIcon}
                 />
-
-
                 <Snackbar
                     open={!!(status.message && status.severity !== "info")}
                     autoHideDuration={ALERT_TIMEOUT_DURATION}
