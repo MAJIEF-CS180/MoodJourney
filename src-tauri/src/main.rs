@@ -10,7 +10,7 @@ mod config;
 use std::fs;
 use std::io::Write; 
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 use chrono::Local;
 
@@ -19,10 +19,12 @@ use db::{
 };
 use dictation::{DictationModel, perform_dictation_cmd};
 use emotion::{EmotionModel, classify_emotion};
-use tauri::{command, AppHandle, Manager, path::BaseDirectory};
+use tauri::{command, AppHandle, Manager, path::BaseDirectory, State};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use serde::{Deserialize, Serialize};
 use crate::suggestion::generate_suggestion_via_api;
+
+use password::PasswordState;
 
 pub struct SafeDictationModelWrapper(pub DictationModel);
 pub struct AppDictationModel(pub Arc<SafeDictationModelWrapper>);
@@ -35,33 +37,42 @@ unsafe impl Send for SafeEmotionModelWrapper {}
 unsafe impl Sync for SafeEmotionModelWrapper {}
 
 #[command]
-fn is_locked() -> bool {
-    password::is_locked()
+fn is_locked_cmd(app_password_state: State<'_, Mutex<PasswordState>>) -> bool {
+    password::is_locked(&app_password_state)
 }
 
 #[command]
-fn check_password_attempt(password: String) -> bool {
-    password::check_password(&password)
+fn check_password_attempt_cmd(
+    app_password_state: State<'_, Mutex<PasswordState>>,
+    password_str: String,
+) -> bool {
+    password::check_password(&app_password_state, &password_str)
 }
 
 #[command]
-fn set_new_password(password: String) {
-    password::set_password(&password);
+fn set_new_password_cmd(
+    app_password_state: State<'_, Mutex<PasswordState>>,
+    password_str: String,
+) {
+    password::set_password(&app_password_state, &password_str);
 }
 
 #[command]
-fn set_locked_cmd(locked: bool) {
-    password::set_locked(locked);
+fn set_locked_explicit_cmd(
+    app_password_state: State<'_, Mutex<PasswordState>>,
+    locked: bool,
+) {
+    password::set_locked(&app_password_state, locked);
 }
 
 #[command]
-fn is_pin_set_cmd() -> bool {
-    password::get_is_pin_set()
+fn is_pin_set_cmd(app_password_state: State<'_, Mutex<PasswordState>>) -> bool {
+    password::get_is_pin_set(&app_password_state)
 }
 
 #[command]
-fn delete_pin_cmd() {
-    password::do_delete_pin()
+fn delete_pin_cmd(app_password_state: State<'_, Mutex<PasswordState>>) {
+    password::do_delete_pin(&app_password_state);
 }
 
 // automatically creates entry with current local date
@@ -453,6 +464,21 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
+            let app_handle_clone = app.handle().clone();
+            let password_file_path = app_handle_clone
+                .path()
+                .app_config_dir()
+                .expect("Failed to get app config directory")
+                .join("password.json");
+
+             if let Some(parent_dir) = password_file_path.parent() {
+                fs::create_dir_all(parent_dir)
+                    .expect("Failed to create directory for password file");
+            }
+
+            let app_password_state = Mutex::new(PasswordState::load_from_path(password_file_path));
+            app.manage(app_password_state);
+
             let app_handle = app.handle().clone();
             match app_handle.path().app_local_data_dir() {
                 Ok(dir) => {
@@ -499,7 +525,7 @@ fn main() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![is_locked, check_password_attempt, set_new_password, set_locked_cmd, is_pin_set_cmd, delete_pin_cmd, create_entry, read_entries, get_entry, update_entry, classify_emotion, delete_entry, perform_dictation_cmd,
+        .invoke_handler(tauri::generate_handler![is_locked_cmd, check_password_attempt_cmd, set_new_password_cmd, set_locked_explicit_cmd, is_pin_set_cmd, delete_pin_cmd, create_entry, read_entries, get_entry, update_entry, classify_emotion, delete_entry, perform_dictation_cmd,
         upload_image_file, generate_suggestion_cmd, chat_with_moodjourney_cmd, load_chat_sessions, load_messages_for_session_cmd, delete_chat_session_cmd])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

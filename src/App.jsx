@@ -141,7 +141,7 @@ function App() {
             const pinIsCurrentlySet = await invoke('is_pin_set_cmd');
             setIsPinSet(pinIsCurrentlySet);
             if (pinIsCurrentlySet) {
-                const appIsLocked = await invoke('is_locked');
+                const appIsLocked = await invoke('is_locked_cmd');
                 if (appIsLocked) {
                     setIsAppLocked(true);
                     setPinAction('unlock');
@@ -637,14 +637,14 @@ function App() {
         setSaving(true);
         try {
             if (pinAction === 'create' || pinAction === 'change') {
-                await invoke('set_new_password', { password: pinInput });
+                await invoke('set_new_password_cmd', { passwordStr: pinInput });
                 setStatus({ message: `PIN ${pinAction === 'create' ? 'created' : 'changed'} successfully.`, severity: "success" });
                 setIsPinSet(true);
                 setIsAppLocked(true);
-                await invoke('set_locked_cmd', { locked: true });
+                await invoke('set_locked_explicit_cmd', { locked: true });
                 handleClosePinModal();
             } else if (pinAction === 'unlock') {
-                const isValid = await invoke('check_password_attempt', { password: pinInput });
+                const isValid = await invoke('check_password_attempt_cmd', { passwordStr: pinInput });
                 if (isValid) {
                     setStatus({ message: "PIN verified. Unlocked.", severity: "success" });
                     setIsAppLocked(false);

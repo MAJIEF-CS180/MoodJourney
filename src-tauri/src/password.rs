@@ -3,44 +3,45 @@ use serde::{Serialize, Deserialize};
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
-static PASSWORD_STATE: Lazy<Mutex<PasswordState>> = Lazy::new(|| {
-    let state = PasswordState::load();
-    Mutex::new(state)
-});
-
 #[derive(Serialize, Deserialize, Debug)]
-struct PasswordData {
-    password_hash: Option<String>,
-    locked: bool,
+pub struct PasswordData {
+    pub password_hash: Option<String>,
+    pub locked: bool,
 }
 
 #[derive(Debug)]
-struct PasswordState {
-    path: PathBuf,
-    password_data: PasswordData,
+pub struct PasswordState {
+    pub path: PathBuf,
+    pub password_data: PasswordData,
 }
 
 impl PasswordState {
-    fn load() -> Self {
-        let path = dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("moodjourney")
-            .join("password.json");
+    pub fn load_from_path(specific_path: PathBuf) -> Self {
+        if let Some(parent_dir) = specific_path.parent() {
+            let _ = fs::create_dir_all(parent_dir);
+        }
 
-        fs::create_dir_all(path.parent().unwrap()).ok();
-
-        let password_data = if path.exists() {
-            let mut file = File::open(&path).expect("Failed to open password file");
-            let mut contents = String::new();
-            file.read_to_string(&mut contents).ok();
-            serde_json::from_str(&contents).unwrap_or(PasswordData {
-                password_hash: None,
-                locked: false,
-            })
-        } else {
+        let password_data = if specific_path.exists() {
+            match File::open(&specific_path) {
+                Ok(mut file) => {
+                    let mut contents = String::new();
+                    if file.read_to_string(&mut contents).is_ok() {
+                        serde_json::from_str(&contents).unwrap_or_else(|_e| {
+                            PasswordData { password_hash: None, locked: false }
+                        })
+                    }
+                    else {
+                        PasswordData { password_hash: None, locked: false }
+                    }
+                }
+                Err(_e) => {
+                    PasswordData { password_hash: None, locked: false }
+                }
+            }
+        }
+        else {
             PasswordData {
                 password_hash: None,
                 locked: false,
@@ -48,35 +49,45 @@ impl PasswordState {
         };
 
         PasswordState {
-            path,
+            path: specific_path,
             password_data,
         }
     }
 
     fn save(&self) {
-        let data = serde_json::to_string_pretty(&self.password_data).unwrap();
-        let mut file = File::create(&self.path).expect("Failed to write password file");
-        file.write_all(data.as_bytes()).expect("Write error");
+        match serde_json::to_string_pretty(&self.password_data) {
+            Ok(data) => {
+                match File::create(&self.path) {
+                    Ok(mut file) => {
+                        if let Err(_e) = file.write_all(data.as_bytes()) {
+                            eprintln!("Error writing to password file {:?}: {}", self.path, _e);
+                        }
+                    }
+                    Err(_e) => {
+                        eprintln!("Failed to create/truncate password file {:?}: {}", self.path, _e);
+                    }
+                }
+            }
+            Err(_e) => {
+                eprintln!("Error serializing password data: {}", _e);
+            }
+        }
     }
 
-    fn hash(password: &str) -> String {
+    fn hash_password(password: &str) -> String {
         let mut hasher = Sha256::new();
         hasher.update(password.as_bytes());
         format!("{:x}", hasher.finalize())
     }
 
-    fn set_locked(&mut self, locked: bool) {
+    pub fn set_locked_internal(&mut self, locked: bool) {
         self.password_data.locked = locked;
         self.save();
     }
 
-    fn is_locked(&self) -> bool {
-        self.password_data.locked
-    }
-
-    fn check_password(&mut self, attempt: &str) -> bool {
+    pub fn check_password_internal(&mut self, attempt: &str) -> bool {
         if let Some(ref hash) = self.password_data.password_hash {
-            let attempt_hash = Self::hash(attempt);
+            let attempt_hash = Self::hash_password(attempt);
             if *hash == attempt_hash {
                 self.password_data.locked = false;
                 self.save();
@@ -86,47 +97,66 @@ impl PasswordState {
         false
     }
 
-    fn set_password(&mut self, new_password: &str) {
-        self.password_data.password_hash = Some(Self::hash(new_password));
-        self.password_data.locked = false;
-        if !new_password.is_empty() {
+    pub fn set_password_internal(&mut self, new_password: &str) {
+        if new_password.is_empty() {
+            self.password_data.password_hash = None;
+            self.password_data.locked = false;
+        }
+        else {
+            self.password_data.password_hash = Some(Self::hash_password(new_password));
             self.password_data.locked = true;
         }
         self.save();
     }
 
-    fn is_pin_set(&self) -> bool {
+    pub fn is_pin_set_internal(&self) -> bool {
         self.password_data.password_hash.is_some()
     }
+    
+    pub fn is_locked_internal(&self) -> bool {
+        if self.is_pin_set_internal() {
+            self.password_data.locked
+        }
+        else {
+            false
+        }
+    }
 
-    fn delete_pin(&mut self) {
+    pub fn delete_pin_internal(&mut self) {
         self.password_data.password_hash = None;
         self.password_data.locked = false;
         self.save();
     }
 }
 
-pub fn set_locked(locked: bool) {
-    let mut state = PASSWORD_STATE.lock().unwrap();
-    state.set_locked(locked);
+pub fn set_locked(state_mutex: &Mutex<PasswordState>, locked: bool) {
+    let mut state_guard = state_mutex.lock().unwrap_or_else(|poisoned| {
+        poisoned.into_inner()
+    });
+    state_guard.set_locked_internal(locked);
 }
 
-pub fn is_locked() -> bool {
-    PASSWORD_STATE.lock().unwrap().is_locked()
+pub fn is_locked(state_mutex: &Mutex<PasswordState>) -> bool {
+    let state_guard = state_mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    state_guard.is_locked_internal()
 }
 
-pub fn check_password(attempt: &str) -> bool {
-    PASSWORD_STATE.lock().unwrap().check_password(attempt)
+pub fn check_password(state_mutex: &Mutex<PasswordState>, attempt: &str) -> bool {
+    let mut state_guard = state_mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    state_guard.check_password_internal(attempt)
 }
 
-pub fn set_password(password: &str) {
-    PASSWORD_STATE.lock().unwrap().set_password(password);
+pub fn set_password(state_mutex: &Mutex<PasswordState>, new_password: &str) {
+    let mut state_guard = state_mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    state_guard.set_password_internal(new_password);
 }
 
-pub fn get_is_pin_set() -> bool {
-    PASSWORD_STATE.lock().unwrap().is_pin_set()
+pub fn get_is_pin_set(state_mutex: &Mutex<PasswordState>) -> bool {
+    let state_guard = state_mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    state_guard.is_pin_set_internal()
 }
 
-pub fn do_delete_pin() {
-    PASSWORD_STATE.lock().unwrap().delete_pin();
+pub fn do_delete_pin(state_mutex: &Mutex<PasswordState>) {
+    let mut state_guard = state_mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    state_guard.delete_pin_internal();
 }
