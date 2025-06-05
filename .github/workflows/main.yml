@@ -1,0 +1,117 @@
+# This workflow is named "Rust CI" and will appear as such in your GitHub Actions tab.
+name: Rust CI
+
+# This defines when the workflow will run.
+# Here, it will run on every 'push' event to the 'main' branch.
+on:
+  push:
+    branches:
+      - main
+
+# 'jobs' defines a set of jobs that will be executed as part of this workflow.
+jobs:
+  # This is a single job named 'build-and-test'. You can have multiple jobs.
+  build-and-test:
+    # Specifies the operating system environment where this job will run.
+    # 'ubuntu-latest' is a common choice for Linux-based builds.
+    runs-on: ubuntu-latest
+
+    # 'steps' defines the sequence of tasks for this job.
+    steps:
+      # Step 1: Checkout the repository code.
+      # This action checks out your repository onto the runner,
+      # allowing the workflow to access your code.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Rust toolchain.
+      # This action installs the specified Rust toolchain (stable by default).
+      # It's essential for compiling and testing Rust code.
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # You can specify a target for cross-compilation if needed.
+          # For testing, the default target is usually sufficient.
+          # target: x86_64-unknown-linux-gnu
+
+      # Step 3: Cache Rust dependencies.
+      # Caches the Cargo registry and build artifacts to speed up subsequent runs.
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ./src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      # Step 4: Set up Node.js.
+      # This is crucial for running npm commands and managing JavaScript dependencies.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.15.0' # Updated to Node.js version 22.15.0
+
+      # Step 5: Cache Node.js modules.
+      # Caches npm dependencies to speed up subsequent 'npm install' runs.
+      - name: Cache Node.js modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      # Step 6: Install Node.js dependencies.
+      # This command installs all dependencies listed in your package.json.
+      - name: Install Node.js dependencies
+        run: npm install
+
+      # Step 7: Install Python.
+      # The model download scripts are written in Python, so Python needs to be available.
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x' # Use the latest Python 3.x version
+
+      # Step 8: Install build dependencies for dictation model.
+      # LLVM and CMake are required for the dictation model.
+      # 'apt-get' is used here because 'ubuntu-latest' is a Debian-based system.
+      - name: Install LLVM and CMake
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y llvm cmake
+
+      # Step 9: Create config.rs with API key.
+      # This step creates the config.rs file from the template and injects the API key.
+      # The API key is accessed securely via 'secrets.GEMINI_API_KEY'.
+      - name: Create config.rs
+        run: |
+          mkdir -p src-tauri/src
+          echo 'pub const GEMINI_API_KEY: &str = "${{ secrets.GEMINI_API_KEY }}";' > src-tauri/src/config.rs
+        # The working directory is not specified here, so it runs from the repository root.
+        # Ensure the path `src-tauri/src/config.rs` is correct relative to the root.
+
+      # Step 10: Download models.
+      # These steps run your Python scripts to download the necessary models.
+      # It navigates to the 'scripts' directory and then executes each script.
+      # Ensure these scripts create the 'src-tauri/models' directory if it doesn't exist
+      # and download the models into it.
+      - name: Download dictation model
+        run: python scripts/download_model_dictation.py
+        working-directory: ./scripts # Execute from the scripts directory
+
+      - name: Download emotion model
+        run: python scripts/download_model_emotion.py
+        working-directory: ./scripts # Execute from the scripts directory
+
+      # Step 11: Run Rust tests.
+      # This command runs all tests within your 'src-tauri' directory.
+      # 'cargo test' automatically discovers and runs functions annotated with #[test].
+      # It will look for tests in db.rs, suggestion.rs, emotion.rs, and password.rs
+      # as long as they are part of the 'src-tauri' crate.
+      - name: Run Rust tests
+        run: cargo test
+        working-directory: ./src-tauri # Execute from the src-tauri directory
