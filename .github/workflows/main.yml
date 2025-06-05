@@ -96,11 +96,11 @@ jobs:
       # Ensure these scripts create the 'src-tauri/models' directory if it doesn't exist
       # and download the models into it.
       - name: Download dictation model
-        run: python scripts/download_model_dictation.py
+        run: python download_model_dictation.py
         working-directory: ./scripts # Execute from the scripts directory
 
       - name: Download emotion model
-        run: python scripts/download_model_emotion.py
+        run: python download_model_emotion.py
         working-directory: ./scripts # Execute from the scripts directory
 
       # Step 11: Run Rust tests.
