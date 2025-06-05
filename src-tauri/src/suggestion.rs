@@ -173,3 +173,56 @@ pub async fn generate_chat_response_via_api(api_contents: &Vec<serde_json::Value
     log::warn!("[API Chat] No chat response content found in Gemini API response structure.");
     Err(anyhow!("No chat response content found in Gemini API response."))
 }
+
+#[cfg(test)]
+mod suggestion_module_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn test_generate_suggestion_api_key_not_configured() {
+        if crate::config::GEMINI_API_KEY == "YOUR_GEMINI_API_KEY_GOES_HERE" {
+            let result = generate_suggestion_via_api("test prompt").await;
+            assert!(result.is_err(), "Expected error.");
+            if let Err(e) = result {
+                assert!(e.to_string().contains("API_KEY_NOT_CONFIGURED"), "Error should mention API key.");
+            }
+        }
+        else {
+            println!("Skipping test: API key set.");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_generate_chat_response_api_key_not_configured() {
+        if crate::config::GEMINI_API_KEY == "YOUR_GEMINI_API_KEY_GOES_HERE" {
+            let contents = vec![json!({"role": "user", "parts": [{"text": "hello"}]})];
+            let result = generate_chat_response_via_api(&contents).await;
+            assert!(result.is_err(), "Expected error.");
+            if let Err(e) = result {
+                assert!(e.to_string().contains("API_KEY_NOT_CONFIGURED"), "Error should mention API key.");
+            }
+        }
+        else {
+            println!("Skipping test: API key set.");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_generate_suggestion_empty_prompt() {
+        let result = generate_suggestion_via_api("").await;
+        assert!(result.is_err(), "Expected error.");
+        if let Err(e) = result {
+            assert!(e.to_string().contains("Prompt cannot be empty"), "Error should say prompt is empty.");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_generate_chat_response_empty_contents() {
+        let result = generate_chat_response_via_api(&Vec::new()).await;
+        assert!(result.is_err(), "Expected error.");
+        if let Err(e) = result {
+            assert!(e.to_string().contains("Chat contents for API cannot be empty"), "Error should say chat content is empty.");
+        }
+    }
+}

@@ -257,7 +257,7 @@ pub fn get_all_chat_sessions_from_db(db_file_path: &Path) -> Result<Vec<ChatSess
             id: row.get(0)?,
             created_at: row.get(1)?,
             last_modified_at: row.get(2)?,
-            title: row.get(3).optional()?,
+            title: row.get::<_, Option<String>>(3)?,
         })
     })?;
     iter.collect()
@@ -386,5 +386,136 @@ mod tests {
         assert!(deleted.is_none(), "Entry should be None after deletion.");
 
         let _ = fs::remove_file(db_path);
+    }
+
+    fn setup_db_for_chat_tests_internal_consistent(db_path: &Path) {
+        if db_path.exists() {
+            let _ = fs::remove_file(db_path);
+        }
+        init_db_at_path(db_path).expect("Failed to init DB for chat test");
+    }
+
+    #[test]
+    fn test_create_and_get_chat_session_from_db() -> std::result::Result<(), String> {
+        let db_path = get_test_db_file_path("create_and_get_chat_session");
+        setup_db_for_chat_tests_internal_consistent(&db_path);
+
+        let session_id = create_new_chat_session_in_db(&db_path).map_err(|e| e.to_string())?;
+        assert!(!session_id.is_empty(), "Session ID empty.");
+
+        let sessions = get_all_chat_sessions_from_db(&db_path).map_err(|e| e.to_string())?;
+        assert_eq!(sessions.len(), 1, "Expected one session.");
+        assert_eq!(sessions[0].id, session_id, "Session ID mismatch.");
+        assert!(sessions[0].title.is_none(), "New session title not None.");
+
+        let _ = fs::remove_file(&db_path);
+        Ok(())
+    }
+
+    #[test]
+    fn test_save_and_get_chat_messages_from_db() -> std::result::Result<(), String> {
+        let db_path = get_test_db_file_path("save_and_get_chat_messages");
+        setup_db_for_chat_tests_internal_consistent(&db_path);
+
+        let session_id = create_new_chat_session_in_db(&db_path).map_err(|e| e.to_string())?;
+
+        save_chat_message_in_db(&db_path, &session_id, "user", "Hello Assistant!").map_err(|e| e.to_string())?;
+        save_chat_message_in_db(&db_path, &session_id, "assistant", "Hello User!").map_err(|e| e.to_string())?;
+
+        let messages = get_messages_for_session_from_db(&db_path, &session_id).map_err(|e| e.to_string())?;
+        assert_eq!(messages.len(), 2, "Expected two messages.");
+
+        assert_eq!(messages[0].sender, "user");
+        assert_eq!(messages[0].content, "Hello Assistant!");
+        assert_eq!(messages[1].sender, "assistant");
+        assert_eq!(messages[1].content, "Hello User!");
+
+        assert!(messages[0].timestamp <= messages[1].timestamp, "Messages not ordered by timestamp.");
+
+        let _ = fs::remove_file(&db_path);
+        Ok(())
+    }
+
+    #[test]
+    fn test_chat_session_title_update_on_first_user_message_in_db() -> std::result::Result<(), String> {
+        let db_path = get_test_db_file_path("chat_session_title_update");
+        setup_db_for_chat_tests_internal_consistent(&db_path);
+        let session_id = create_new_chat_session_in_db(&db_path).map_err(|e| e.to_string())?;
+
+        let first_message_content = "This is the very first message from the user.";
+        save_chat_message_in_db(&db_path, &session_id, "user", first_message_content).map_err(|e| e.to_string())?;
+
+        let sessions = get_all_chat_sessions_from_db(&db_path).map_err(|e| e.to_string())?;
+        let session = sessions.iter().find(|s| s.id == session_id).expect("Session not found");
+        
+        let expected_title_prefix: String = first_message_content.chars().take(50).collect();
+        let final_expected_title = if first_message_content.chars().count() > 50 { 
+            format!("{}...", expected_title_prefix) 
+        } else { 
+            expected_title_prefix.clone() 
+        };
+
+        assert_eq!(session.title.as_ref().unwrap(), &final_expected_title, "Session title not set correctly.");
+
+        save_chat_message_in_db(&db_path, &session_id, "assistant", "Okay, interesting.").map_err(|e| e.to_string())?;
+        let sessions_after_assistant = get_all_chat_sessions_from_db(&db_path).map_err(|e| e.to_string())?;
+        let session_after_assistant = sessions_after_assistant.iter().find(|s| s.id == session_id).expect("Session not found");
+        assert_eq!(session_after_assistant.title.as_ref().unwrap(), &final_expected_title, "Session title changed after assistant message.");
+
+        save_chat_message_in_db(&db_path, &session_id, "user", "Another user message.").map_err(|e| e.to_string())?;
+        let sessions_after_second_user = get_all_chat_sessions_from_db(&db_path).map_err(|e| e.to_string())?;
+        let session_after_second_user = sessions_after_second_user.iter().find(|s| s.id == session_id).expect("Session not found");
+        assert_eq!(session_after_second_user.title.as_ref().unwrap(), &final_expected_title, "Session title changed after second user message.");
+
+        let _ = fs::remove_file(&db_path);
+        Ok(())
+    }
+
+    #[test]
+    fn test_chat_session_title_truncation_in_db() -> std::result::Result<(), String> {
+        let db_path = get_test_db_file_path("chat_session_title_truncation");
+        setup_db_for_chat_tests_internal_consistent(&db_path);
+        let session_id = create_new_chat_session_in_db(&db_path).map_err(|e| e.to_string())?;
+        let long_message = "This is a very long first message that definitely exceeds the fifty character limit for the title of a chat session, it just keeps going on and on and on and on.";
+        save_chat_message_in_db(&db_path, &session_id, "user", long_message).map_err(|e| e.to_string())?;
+
+        let sessions = get_all_chat_sessions_from_db(&db_path).map_err(|e| e.to_string())?;
+        let session = sessions.iter().find(|s| s.id == session_id).expect("Session not found");
+        
+        let expected_truncated_prefix: String = long_message.chars().take(50).collect();
+        let expected_title_with_ellipsis = format!("{}...", expected_truncated_prefix);
+        
+        assert_eq!(session.title.as_ref().unwrap(), &expected_title_with_ellipsis, "Session title not truncated correctly.");
+
+        let _ = fs::remove_file(&db_path);
+        Ok(())
+    }
+
+    #[test]
+    fn test_delete_chat_session_and_cascade_in_db() -> std::result::Result<(), String> {
+        let db_path = get_test_db_file_path("delete_chat_session_cascade");
+        setup_db_for_chat_tests_internal_consistent(&db_path);
+        let session_id1 = create_new_chat_session_in_db(&db_path).map_err(|e| e.to_string())?;
+        let session_id2 = create_new_chat_session_in_db(&db_path).map_err(|e| e.to_string())?;
+
+        save_chat_message_in_db(&db_path, &session_id1, "user", "Hi from session 1").map_err(|e| e.to_string())?;
+        save_chat_message_in_db(&db_path, &session_id1, "assistant", "Reply in session 1").map_err(|e| e.to_string())?;
+        save_chat_message_in_db(&db_path, &session_id2, "user", "Hi from session 2").map_err(|e| e.to_string())?;
+
+        delete_chat_session_from_db(&db_path, &session_id1).map_err(|e| e.to_string())?;
+
+        let sessions = get_all_chat_sessions_from_db(&db_path).map_err(|e| e.to_string())?;
+        assert_eq!(sessions.len(), 1, "Expected one session left.");
+        assert_eq!(sessions[0].id, session_id2, "Wrong session deleted or ID incorrect.");
+
+        let messages_for_deleted_session = get_messages_for_session_from_db(&db_path, &session_id1).map_err(|e| e.to_string())?;
+        assert!(messages_for_deleted_session.is_empty(), "Messages for deleted session not gone.");
+        
+        let messages_for_remaining_session = get_messages_for_session_from_db(&db_path, &session_id2).map_err(|e| e.to_string())?;
+        assert_eq!(messages_for_remaining_session.len(), 1, "Messages for remaining session incorrect.");
+        assert_eq!(messages_for_remaining_session[0].content, "Hi from session 2");
+
+        let _ = fs::remove_file(&db_path);
+        Ok(())
     }
 }
