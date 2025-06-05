@@ -94,3 +94,100 @@ pub fn classify_emotion(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use anyhow::Result;
+
+    fn get_dev_emotion_model_path_for_tests() -> Result<PathBuf> {
+        let current_dir = std::env::current_dir().expect("Failed to get current directory.");
+        let project_root_marker = "src-tauri";
+
+        let mut search_path = current_dir.clone();
+        while !search_path.join(project_root_marker).is_dir() {
+            if !search_path.pop() {
+                if current_dir.join(project_root_marker).is_dir() {
+                    search_path = current_dir;
+                    break;
+                }
+                return Err(anyhow::anyhow!(
+                    "Project root 'src-tauri' not found from {}.",
+                    current_dir.display()
+                ));
+            }
+        }
+
+        let model_path = search_path.join(project_root_marker).join("models").join("emotion");
+
+        if !model_path.exists() {
+            return Err(anyhow::anyhow!(
+                "Model dir not found at {}. Base: {}, Current: {}",
+                model_path.display(),
+                search_path.display(),
+                std::env::current_dir().unwrap_or_default().display()
+            ));
+        }
+        Ok(model_path)
+    }
+
+    #[test]
+    fn test_emotion_classification_basic_joy() -> Result<()> {
+        let model_path = get_dev_emotion_model_path_for_tests()?;
+        let emotion_model = EmotionModel::new(model_path)?;
+
+        let text = "I am feeling wonderful and excited today!";
+        let result = emotion_model.classify(text);
+
+        assert!(result.is_ok(), "Classification failed: {:?}", result.err());
+        let classification = result.unwrap();
+        assert!(!classification.is_empty(), "Result empty.");
+        let known_labels = vec!["anger", "disgust", "fear", "joy", "neutral", "sadness", "surprise"];
+        assert!(known_labels.contains(&classification.to_lowercase().as_str()), "Unexpected label: {}", classification);
+        Ok(())
+    }
+
+    #[test]
+    fn test_emotion_classification_empty_input() -> Result<()> {
+        let model_path = get_dev_emotion_model_path_for_tests()?;
+        let emotion_model = EmotionModel::new(model_path)?;
+
+        let text = "";
+        let result = emotion_model.classify(text);
+
+        assert!(result.is_err(), "Classification succeeded for empty text.");
+        if let Err(e) = result {
+            assert!(e.to_string().contains("Input text for emotion classification cannot be empty."), "Wrong error for empty input: {}.", e);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_emotion_classification_sadness_example() -> Result<()> {
+        let model_path = get_dev_emotion_model_path_for_tests()?;
+        let emotion_model = EmotionModel::new(model_path)?;
+
+        let text = "I feel so lonely and down today.";
+        let result = emotion_model.classify(text);
+        assert!(result.is_ok(), "Classification failed for sadness: {:?}", result.err());
+        let classification = result.unwrap();
+        assert!(!classification.is_empty());
+        assert_eq!(classification.to_lowercase(), "sadness", "Expected 'sadness' for '{}', got '{}'", text, classification);
+        Ok(())
+    }
+
+    #[test]
+    fn test_emotion_classification_anger_example() -> Result<()> {
+        let model_path = get_dev_emotion_model_path_for_tests()?;
+        let emotion_model = EmotionModel::new(model_path)?;
+
+        let text = "This is making me really angry and frustrated!";
+        let result = emotion_model.classify(text);
+        assert!(result.is_ok(), "Classification failed for anger: {:?}", result.err());
+        let classification = result.unwrap();
+        assert!(!classification.is_empty());
+        assert_eq!(classification.to_lowercase(), "anger", "Expected 'anger' for '{}', got '{}'", text, classification);
+        Ok(())
+    }
+}

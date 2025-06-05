@@ -175,7 +175,7 @@ pub async fn generate_chat_response_via_api(api_contents: &Vec<serde_json::Value
 }
 
 #[cfg(test)]
-mod suggestion_module_tests {
+mod tests {
     use super::*;
     use serde_json::json;
 
