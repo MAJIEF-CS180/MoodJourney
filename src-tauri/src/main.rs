@@ -5,23 +5,24 @@ mod dictation;
 mod emotion;
 mod suggestion;
 mod password;
+mod config;
 
 use std::fs;
-use std::io::Write; 
+use std::io::Write;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 use chrono::Local;
 
-use db::{
-    init_db, create_entry_with_now, get_entries, get_entry_by_date, update_entry_by_date, delete_entry_by_date, Entry,
-};
+use db::Entry;
 use dictation::{DictationModel, perform_dictation_cmd};
 use emotion::{EmotionModel, classify_emotion};
-use tauri::{command, AppHandle, Manager, path::BaseDirectory};
+use tauri::{command, AppHandle, Manager, path::BaseDirectory, State};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use serde::{Deserialize, Serialize};
 use crate::suggestion::generate_suggestion_via_api;
+
+use password::PasswordState;
 
 pub struct SafeDictationModelWrapper(pub DictationModel);
 pub struct AppDictationModel(pub Arc<SafeDictationModelWrapper>);
@@ -34,64 +35,138 @@ unsafe impl Send for SafeEmotionModelWrapper {}
 unsafe impl Sync for SafeEmotionModelWrapper {}
 
 #[command]
-fn is_locked() -> bool {
-    password::is_locked()
+fn is_locked_cmd(app_password_state: State<'_, Mutex<PasswordState>>) -> bool {
+    password::is_locked(&app_password_state)
 }
 
 #[command]
-fn check_password_attempt(password: String) -> bool {
-    password::check_password(&password)
+fn check_password_attempt_cmd(
+    app_password_state: State<'_, Mutex<PasswordState>>,
+    password_str: String,
+) -> bool {
+    password::check_password(&app_password_state, &password_str)
 }
 
 #[command]
-fn set_new_password(password: String) {
-    password::set_password(&password);
+fn set_new_password_cmd(
+    app_password_state: State<'_, Mutex<PasswordState>>,
+    password_str: String,
+) {
+    password::set_password(&app_password_state, &password_str);
 }
 
 #[command]
-fn set_locked_cmd(locked: bool) {
-    password::set_locked(locked);
+fn set_locked_explicit_cmd(
+    app_password_state: State<'_, Mutex<PasswordState>>,
+    locked: bool,
+) {
+    password::set_locked(&app_password_state, locked);
 }
 
 #[command]
-fn is_pin_set_cmd() -> bool {
-    password::get_is_pin_set()
+fn is_pin_set_cmd(app_password_state: State<'_, Mutex<PasswordState>>) -> bool {
+    password::get_is_pin_set(&app_password_state)
 }
 
 #[command]
-fn delete_pin_cmd() {
-    password::do_delete_pin()
+fn delete_pin_cmd(app_password_state: State<'_, Mutex<PasswordState>>) {
+    password::do_delete_pin(&app_password_state);
 }
 
 // automatically creates entry with current local date
 // content and password are optional
 #[command]
-fn create_entry(title: &str, content: Option<&str>, password: Option<&str>, image: Option<&str>) -> Result<(), String> {
-    create_entry_with_now(title, content, password, image).map_err(|e| e.to_string())
+fn create_entry(
+    app_db_path: State<'_, PathBuf>,
+    title: &str, 
+    content: Option<&str>, 
+    password: Option<&str>, 
+    image: Option<&str>
+) -> Result<(), String> {
+    db::create_entry_with_now_in_db(&app_db_path, title, content, password, image) 
+        .map_err(|e| e.to_string())
 }
 
 // returns list of all entries
 #[command]
-fn read_entries() -> Result<Vec<Entry>, String> {
-    get_entries().map_err(|e| e.to_string())
+fn read_entries(
+    app_db_path: State<'_, PathBuf>
+) -> Result<Vec<Entry>, String> {
+    db::get_entries_from_db(&app_db_path).map_err(|e| e.to_string())
 }
 
 // get a specific entry by date
 #[command]
-fn get_entry(date: &str) -> Result<Option<Entry>, String> {
-    get_entry_by_date(date).map_err(|e| e.to_string())
+fn get_entry(
+    app_db_path: State<'_, PathBuf>,
+    date: &str
+) -> Result<Option<Entry>, String> {
+    db::get_entry_by_date_from_db(&app_db_path, date).map_err(|e| e.to_string())
 }
 
 // update a specific entry by date
 #[command]
-fn update_entry(date: &str, new_title: &str, new_content: Option<&str>, new_password: Option<&str>, new_image: Option<&str>) -> Result<(), String> {
-    update_entry_by_date(date, new_title, new_content, new_password, new_image).map_err(|e| e.to_string())
+fn update_entry(
+    app_handle: AppHandle, 
+    app_db_path: State<'_, PathBuf>,
+    date: &str,
+    new_title: &str, 
+    new_content: Option<&str>,
+    new_password: Option<&str>,
+    new_image: Option<&str>,
+) -> Result<(), String> {
+    match db::get_entry_by_date_from_db(&app_db_path, date) { 
+        Ok(Some(current_entry)) => {
+            if let Some(old_image_relative_path) = current_entry.image {
+                if !old_image_relative_path.is_empty() {
+                    let mut delete_old_image = false;
+                    match new_image {
+                        Some(new_image_path_str) => {
+                            if new_image_path_str != old_image_relative_path || new_image_path_str.is_empty() {
+                                delete_old_image = true;
+                            }
+                        }
+                        None => {
+                           if !old_image_relative_path.trim().is_empty() {
+                                delete_old_image = true;
+                           }
+                        }
+                    }
+
+                    if delete_old_image {
+                        match app_handle.path().app_local_data_dir() {
+                            Ok(app_data_dir) => {
+                                let full_old_image_path = app_data_dir.join(&old_image_relative_path);
+                                if full_old_image_path.exists() {
+                                    if let Err(e) = fs::remove_file(&full_old_image_path) {
+                                        eprintln!("[update_entry] Failed to delete old image file {:?}: {}", full_old_image_path, e);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("[update_entry] Error getting app local data dir for old image deletion: {}", e);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(None) => { /* eprintln!("[update_entry] Entry not found for image check: {}", date); */ }
+        Err(e) => { eprintln!("[update_entry] Error fetching entry for image check: {}", e); }
+    }
+
+    db::update_entry_by_date_in_db(&app_db_path, date, Some(new_title), new_content, new_password, new_image)
+        .map_err(|e| e.to_string())
 }
 
 // delete a specific entry by date
 #[command]
-fn delete_entry(app_handle: AppHandle, date: &str) -> Result<(), String> {
-    match get_entry_by_date(date) {
+fn delete_entry(
+    app_handle: AppHandle, 
+    app_db_path: State<'_, PathBuf>,
+    date: &str
+) -> Result<(), String> {
+    match db::get_entry_by_date_from_db(&app_db_path, date) { 
         Ok(Some(entry)) => {
             if let Some(image_file_name_str) = entry.image {
                 if !image_file_name_str.is_empty() {
@@ -100,32 +175,23 @@ fn delete_entry(app_handle: AppHandle, date: &str) -> Result<(), String> {
                             let full_image_path = app_data_dir.join(&image_file_name_str);
                             if full_image_path.exists() {
                                 if let Err(e) = fs::remove_file(&full_image_path) {
-                                    eprintln!("Failed to delete image file {:?}: {}", full_image_path, e);
-                                } 
-                                else {
-                                    println!("Successfully deleted image file: {:?}", full_image_path);
+                                    eprintln!("[delete_entry] Failed to delete image file {:?}: {}", full_image_path, e);
                                 }
-                            }
-                            else {
-                                println!("Image file not found for deletion: {:?}", full_image_path);
                             }
                         }
                         Err(e) => {
-                            eprintln!("Error getting app local data dir for image deletion: {}", e);
+                            eprintln!("[delete_entry] Error getting app local data dir for image deletion: {}", e);
                         }
                     }
                 }
             }
         }
-        Ok(None) => {
-            println!("Entry not found in DB for date {}, no image to delete.", date);
-        }
-        Err(e) => {
-            eprintln!("Error fetching entry from DB to delete its image: {}", e);
-            return Err(format!("Failed to fetch entry for image deletion: {}", e));
+        Ok(None) => { /* println!("[delete_entry] Entry not found for image deletion: {}", date); */ }
+        Err(e) => { 
+            eprintln!("[delete_entry] Error fetching entry for image deletion: {}", e);
         }
     }
-    delete_entry_by_date(date).map_err(|e| e.to_string())
+    db::delete_entry_by_date_from_db(&app_db_path, date).map_err(|e| e.to_string())
 }
 
 // upload image function
@@ -272,6 +338,7 @@ struct ChatCompletionResponse {
 
 #[command]
 async fn chat_with_moodjourney_cmd(
+    app_db_path: State<'_, PathBuf>,
     user_message: String,
     session_id_option: Option<String>,
 ) -> Result<ChatCompletionResponse, String> {
@@ -279,18 +346,18 @@ async fn chat_with_moodjourney_cmd(
 
     let current_session_id = match session_id_option {
         Some(id) => id,
-        None => db::create_new_chat_session().map_err(|e| {
+        None => db::create_new_chat_session_in_db(&app_db_path).map_err(|e| {
             log::error!("Failed to create new chat session: {}", e);
             e.to_string()
         })?,
     };
 
-    db::save_chat_message(&current_session_id, "user", &user_message).map_err(|e| {
+    db::save_chat_message_in_db(&app_db_path, &current_session_id, "user", &user_message).map_err(|e| {
         log::error!("Failed to save user message for session {}: {}", current_session_id, e);
         e.to_string()
     })?;
 
-    let all_messages_for_session_from_db = db::get_messages_for_session(&current_session_id)
+    let all_messages_for_session_from_db = db::get_messages_for_session_from_db(&app_db_path, &current_session_id)
         .map_err(|e| format!("Failed to retrieve messages for session {}: {}", current_session_id, e))?;
 
     let mut api_request_contents: Vec<serde_json::Value> = Vec::new();
@@ -314,7 +381,7 @@ async fn chat_with_moodjourney_cmd(
 
             system_and_first_user_message_parts.push(initial_prompt_block);
 
-            let all_journal_entries = db::get_entries().unwrap_or_default();
+            let all_journal_entries = db::get_entries_from_db(&app_db_path).unwrap_or_default();
             if !all_journal_entries.is_empty() {
                 system_and_first_user_message_parts.push("\n\nHere are the user's past journal entries as general context:\n---\n".to_string());
                 for entry in all_journal_entries.iter() {
@@ -348,7 +415,7 @@ async fn chat_with_moodjourney_cmd(
                 Err("The AI generated an empty response.".to_string())
             }
             else {
-                db::save_chat_message(&current_session_id, "assistant", &response_text).map_err(|e| {
+                db::save_chat_message_in_db(&app_db_path, &current_session_id, "assistant", &response_text).map_err(|e| {
                     log::error!("Failed to save assistant message for session {}: {}", current_session_id, e);
                     e.to_string()
                 })?;
@@ -366,27 +433,68 @@ async fn chat_with_moodjourney_cmd(
 }
 
 #[command]
-async fn load_chat_sessions() -> Result<Vec<db::ChatSession>, String> {
-    db::get_all_chat_sessions().map_err(|e| e.to_string())
+async fn load_chat_sessions(
+    app_db_path: State<'_, PathBuf>
+) -> Result<Vec<db::ChatSession>, String> {
+    db::get_all_chat_sessions_from_db(&app_db_path).map_err(|e| e.to_string())
 }
 
 #[command]
-async fn load_messages_for_session_cmd(session_id: String) -> Result<Vec<db::ChatMessage>, String> {
-    db::get_messages_for_session(&session_id).map_err(|e| e.to_string())
+async fn load_messages_for_session_cmd(
+    app_db_path: State<'_, PathBuf>,
+    session_id: String
+) -> Result<Vec<db::ChatMessage>, String> {
+    db::get_messages_for_session_from_db(&app_db_path, &session_id).map_err(|e| e.to_string())
 }
 
 #[command]
-async fn delete_chat_session_cmd(session_id: String) -> Result<(), String> {
-    db::delete_chat_session(&session_id).map_err(|e| e.to_string())
+async fn delete_chat_session_cmd(
+    app_db_path: State<'_, PathBuf>,
+    session_id: String
+) -> Result<(), String> {
+    db::delete_chat_session_from_db(&app_db_path, &session_id).map_err(|e| e.to_string())
 }
 
 fn main() {
-    init_db().expect("Failed to initialize database");
-
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
+            let app_handle_clone = app.handle().clone();
+            let password_file_path = app_handle_clone
+                .path()
+                .app_config_dir()
+                .expect("Failed to get app config directory")
+                .join("password.json");
+
+             if let Some(parent_dir) = password_file_path.parent() {
+                fs::create_dir_all(parent_dir)
+                    .expect("Failed to create directory for password file");
+            }
+
+            let app_password_state = Mutex::new(PasswordState::load_from_path(password_file_path));
+            app.manage(app_password_state);
+
+            let app_data_dir_path = app_handle_clone.path().app_data_dir()
+                .expect("Failed to get app data directory for database");
+            
+            if !app_data_dir_path.exists() {
+                fs::create_dir_all(&app_data_dir_path)
+                    .expect("Failed to create main app data directory");
+            }
+
+            let app_db_file_path = app_data_dir_path.join("entries.db"); 
+
+            match db::init_db_at_path(&app_db_file_path) {
+                Ok(_) => { /* println!("[main.rs] Database initialized successfully at {:?}", app_db_file_path); */ },
+                Err(e) => {
+                    eprintln!("CRITICAL: Failed to initialize database at {:?}: {}", app_db_file_path, e);
+                    panic!("Database initialization failed. Application cannot continue.");
+                }
+            }
+
+            app.manage(app_db_file_path.clone());             
+
             let app_handle = app.handle().clone();
             match app_handle.path().app_local_data_dir() {
                 Ok(dir) => {
@@ -423,7 +531,7 @@ fn main() {
             app.manage(AppEmotionModel(Arc::new(safe_emotion_model_wrapper)));
             println!("[main.rs] EmotionModel initialized and managed.");
 
-            let dictation_model_name = "ggml-base.en.bin";
+            let dictation_model_name = "ggml-tiny.en-q5_1.bin";
             log::info!("[main.rs] Attempting to load dictation model: {}", dictation_model_name);
             let dictation_model_instance = DictationModel::new(&app_handle, dictation_model_name)
                 .expect("CRITICAL: Failed to initialize DictationModel. Check model file and paths.");
@@ -433,8 +541,18 @@ fn main() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![is_locked, check_password_attempt, set_new_password, set_locked_cmd, is_pin_set_cmd, delete_pin_cmd, create_entry, read_entries, get_entry, update_entry, classify_emotion, delete_entry, perform_dictation_cmd,
-        upload_image_file, generate_suggestion_cmd, chat_with_moodjourney_cmd, load_chat_sessions, load_messages_for_session_cmd, delete_chat_session_cmd])
+        .invoke_handler(tauri::generate_handler![
+            is_locked_cmd, check_password_attempt_cmd, set_new_password_cmd, 
+            set_locked_explicit_cmd, is_pin_set_cmd, delete_pin_cmd, 
+            
+            create_entry, read_entries, get_entry, update_entry, delete_entry,
+            
+            classify_emotion, perform_dictation_cmd, upload_image_file, 
+            generate_suggestion_cmd, 
+            
+            chat_with_moodjourney_cmd, load_chat_sessions, 
+            load_messages_for_session_cmd, delete_chat_session_cmd
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

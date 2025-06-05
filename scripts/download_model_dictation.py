@@ -3,7 +3,7 @@ from pathlib import Path
 import os
 
 def download_model_dictation():
-    model_url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin?download=true"
+    model_url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en-q5_1.bin?download=true"
     try:
         script_dir = Path(__file__).resolve().parent
         project_root = script_dir if (script_dir / "src-tauri").is_dir() else script_dir.parent
@@ -14,12 +14,12 @@ def download_model_dictation():
                  print("Please run this script from your project's root directory or adjust the path logic.")
                  return
         target_dir = project_root / "src-tauri" / "models" / "dictation"
-        file_name = "ggml-base.en.bin" 
+        file_name = "ggml-tiny.en-q5_1.bin" 
         destination_path = target_dir / file_name
     except Exception as e:
         print(f"Error determining paths: {e}")
         target_dir = Path("./src-tauri/models/dictation")
-        file_name = "ggml-base.en.bin"
+        file_name = "ggml-tiny.en-q5_1.bin"
         destination_path = target_dir / file_name
     print(f"Target directory: {target_dir.resolve()}")
     print(f"Destination path: {destination_path.resolve()}")

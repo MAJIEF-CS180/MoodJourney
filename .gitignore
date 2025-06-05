@@ -22,5 +22,5 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-models/emotion/model.safetensors
-src-tauri/entries.db
+src-tauri/src/config.rs
+src-tauri/models
