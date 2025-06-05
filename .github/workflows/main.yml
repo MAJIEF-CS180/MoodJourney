@@ -29,10 +29,6 @@ jobs:
       # It's essential for compiling and testing Rust code.
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-        with:
-          # You can specify a target for cross-compilation if needed.
-          # For testing, the default target is usually sufficient.
-          # target: x86_64-unknown-linux-gnu
 
       # Step 3: Cache Rust dependencies.
       # Caches the Cargo registry and build artifacts to speed up subsequent runs.
