@@ -98,7 +98,14 @@ jobs:
       - name: Install GDK 3.0 development libraries
         run: sudo apt-get install -y libgtk-3-dev
 
-      # Step 12: Create config.rs with API key.
+      # Step 12: Install WebKitGTK and libsoup development libraries
+      # Required by javascriptcore-rs-sys and soup3-sys for Rust build/test.
+      # These packages provide the necessary .pc files for pkg-config.
+      - name: Install WebKitGTK and libsoup development libraries
+        run: |
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libsoup-3.0-dev
+
+      # Step 13: Create config.rs with API key.
       # This step creates the config.rs file from the template and injects the API key.
       # The API key is accessed securely via 'secrets.GEMINI_API_KEY'.
       - name: Create config.rs
@@ -108,7 +115,7 @@ jobs:
         # The working directory is not specified here, so it runs from the repository root.
         # Ensure the path `src-tauri/src/config.rs` is correct relative to the root.
 
-      # Step 13: Download models.
+      # Step 14: Download models.
       # These steps run your Python scripts to download the necessary models.
       # It navigates to the 'scripts' directory and then executes each script.
       # Ensure these scripts create the 'src-tauri/models' directory if it doesn't exist
@@ -121,7 +128,7 @@ jobs:
         run: python download_model_emotion.py
         working-directory: ./scripts # Execute from the scripts directory
 
-      # Step 14: Run Rust tests.
+      # Step 15: Run Rust tests.
       # This command runs all tests within your 'src-tauri' directory.
       # 'cargo test' automatically discovers and runs functions annotated with #[test].
       # It will look for tests in db.rs, suggestion.rs, emotion.rs, and password.rs
