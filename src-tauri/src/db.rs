@@ -271,7 +271,7 @@ mod tests {
 
         let new_entry = Entry {
             date: "2025-04-20".to_string(),
-            title: "Test Title".to_string(),
+            title: Some("Test Title".to_string()),
             content: Some("Test Content".to_string()),
             password: Some("1234".to_string()),
             image: Some("images/test_image.jpg".to_string()),
@@ -290,7 +290,7 @@ mod tests {
 
         let entry = Entry {
             date: "2025-04-21".to_string(),
-            title: "Initial Title".to_string(),
+            title: Some("Initial Title".to_string()),
             content: Some("Initial Content".to_string()),
             password: Some("initpass".to_string()),
             image: None,
@@ -299,14 +299,14 @@ mod tests {
         add_entry(entry).expect("add failed");
 
         let fetched = get_entry_by_date("2025-04-21").expect("get failed").expect("no entry");
-        assert_eq!(fetched.title, "Initial Title");
+        assert_eq!(fetched.title, Some("Initial Title".to_string()));
         assert!(fetched.image.is_none());
 
         update_entry_by_date("2025-04-21", "Updated", Some("Updated Content"), Some("newpass"), None)
             .expect("update failed");
 
         let updated = get_entry_by_date("2025-04-21").expect("get failed").expect("no entry");
-        assert_eq!(updated.title, "Updated");
+        assert_eq!(updated.title, Some("Updated".to_string()));
         assert_eq!(updated.content.as_deref(), Some("Updated Content"));
 
         delete_entry_by_date("2025-04-21").expect("delete failed");
