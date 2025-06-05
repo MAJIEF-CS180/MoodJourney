@@ -72,6 +72,14 @@ jobs:
         with:
           python-version: '3.x' # Use the latest Python 3.x version
 
+      # New Step: Install Python dependencies
+      # This step installs the required Python packages using pip.
+      - name: Install Python dependencies
+        run: |
+          pip install requests
+          pip install transformers
+          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
       # Step 8: Install build dependencies for dictation model.
       # LLVM and CMake are required for the dictation model.
       # 'apt-get' is used here because 'ubuntu-latest' is a Debian-based system.
