@@ -1,11 +1,12 @@
 use rusqlite::{params, Connection, Result};
 use rusqlite::OptionalExtension;
-use rusqlite::{Error};       
+use rusqlite::{Error as RusqliteError};       
 use rusqlite::ffi;                   
 use serde::{Deserialize, Serialize};
 use chrono::Local;
 use chrono::NaiveDate;
 use chrono::Utc;
+use std::path::Path;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Entry {
@@ -33,11 +34,11 @@ pub struct ChatMessage {
     pub timestamp: String,
 }
 
-pub fn init_db() -> Result<()> {
-    let conn = Connection::open("entries.db")?;
+pub fn init_db_at_path(db_file_path: &Path) -> Result<()> {
+    let conn = Connection::open(db_file_path)?;
     conn.execute(
         "CREATE TABLE IF NOT EXISTS entries (
-            date TEXT NOT NULL,
+            date TEXT NOT NULL PRIMARY KEY, -- Added PRIMARY KEY for date consistency
             title TEXT NOT NULL,
             content TEXT,
             password TEXT,
@@ -47,10 +48,10 @@ pub fn init_db() -> Result<()> {
     )?;
     conn.execute(
         "CREATE TABLE IF NOT EXISTS assistant_chat_sessions (
-            id TEXT PRIMARY KEY, -- Unique ID for the chat session (e.g., UUID)
+            id TEXT PRIMARY KEY,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             last_modified_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            title TEXT -- A title for the chat, could be first user message snippet
+            title TEXT
         )",
         [],
     )?;
@@ -58,7 +59,7 @@ pub fn init_db() -> Result<()> {
         "CREATE TABLE IF NOT EXISTS assistant_chat_messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id TEXT NOT NULL,
-            sender TEXT NOT NULL, -- 'user' or 'assistant'
+            sender TEXT NOT NULL,
             content TEXT NOT NULL,
             timestamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (session_id) REFERENCES assistant_chat_sessions(id) ON DELETE CASCADE
@@ -68,9 +69,16 @@ pub fn init_db() -> Result<()> {
     Ok(())
 }
 
-pub fn add_entry(entry: Entry) -> Result<()> {
+// DO NOT USE THIS FUNCTION
+#[allow(dead_code)]
+pub fn init_db() -> Result<()> {
+    let default_db_path = Path::new("entries.db"); 
+    init_db_at_path(default_db_path)
+}
+
+pub fn add_entry_to_db(db_file_path: &Path, entry: Entry) -> Result<()> {
     if NaiveDate::parse_from_str(&entry.date, "%Y-%m-%d").is_err() {
-        return Err(Error::SqliteFailure(
+        return Err(RusqliteError::SqliteFailure(
             ffi::Error {
                 code: ffi::ErrorCode::ConstraintViolation,
                 extended_code: ffi::ErrorCode::ConstraintViolation as i32,
@@ -79,9 +87,9 @@ pub fn add_entry(entry: Entry) -> Result<()> {
         ));
     }
 
-    let fetched = get_entry_by_date(entry.date.as_str())?;
+    let fetched = get_entry_by_date_from_db(db_file_path, entry.date.as_str())?;
     if fetched.is_some() {
-        return Err(Error::SqliteFailure(
+        return Err(RusqliteError::SqliteFailure(
             ffi::Error {
                 code: ffi::ErrorCode::ConstraintViolation,
                 extended_code: ffi::ErrorCode::ConstraintViolation as i32, 
@@ -90,7 +98,7 @@ pub fn add_entry(entry: Entry) -> Result<()> {
         ));
     }
 
-    let conn = Connection::open("entries.db")?;
+    let conn = Connection::open(db_file_path)?;
     conn.execute(
         "INSERT INTO entries (date, title, content, password, image) VALUES (?1, ?2, ?3, ?4, ?5)",
         params![entry.date, entry.title.as_ref(), entry.content, entry.password, entry.image],
@@ -98,9 +106,9 @@ pub fn add_entry(entry: Entry) -> Result<()> {
     Ok(())
 }
 
-pub fn get_entries() -> Result<Vec<Entry>> {
-    let conn = Connection::open("entries.db")?;
-    let mut stmt = conn.prepare("SELECT date, title, content, password, image FROM entries")?;
+pub fn get_entries_from_db(db_file_path: &Path) -> Result<Vec<Entry>> {
+    let conn = Connection::open(db_file_path)?;
+    let mut stmt = conn.prepare("SELECT date, title, content, password, image FROM entries ORDER BY date DESC")?;
     let entry_iter = stmt.query_map([], |row| {
         Ok(Entry {
             date: row.get(0)?,
@@ -112,32 +120,29 @@ pub fn get_entries() -> Result<Vec<Entry>> {
     })?;
 
     let mut entries = Vec::new();
-    for entry in entry_iter {
-        entries.push(entry?);
+    for entry_result in entry_iter {
+        entries.push(entry_result?);
     }
-
     Ok(entries)
 }
 
-pub fn get_entry_by_date(date: &str) -> Result<Option<Entry>> {
-    let conn = Connection::open("entries.db")?;
+pub fn get_entry_by_date_from_db(db_file_path: &Path, date: &str) -> Result<Option<Entry>> {
+    let conn = Connection::open(db_file_path)?;
     let mut stmt = conn.prepare("SELECT date, title, content, password, image FROM entries WHERE date = ?1")?;
-
     let entry = stmt.query_row([date], |row| {
         Ok(Entry {
             date: row.get(0)?,
-            title: row.get(1)?,
+            title: row.get(1).optional()?,
             content: row.get(2)?,
             password: row.get(3)?,
             image: row.get(4)?,
         })
     }).optional()?;
-
     Ok(entry)
 }
 
-pub fn update_entry_by_date(date: &str, new_title: &str, new_content: Option<&str>, new_password: Option<&str>, new_image: Option<&str>) -> Result<()> {
-    let conn = Connection::open("entries.db")?;
+pub fn update_entry_by_date_in_db(db_file_path: &Path, date: &str, new_title: Option<&str>, new_content: Option<&str>, new_password: Option<&str>, new_image: Option<&str>) -> Result<()> {
+    let conn = Connection::open(db_file_path)?;
     conn.execute(
         "UPDATE entries SET title = ?1, content = ?2, password = ?3, image = ?4 WHERE date = ?5",
         params![new_title, new_content, new_password, new_image, date],
@@ -145,13 +150,13 @@ pub fn update_entry_by_date(date: &str, new_title: &str, new_content: Option<&st
     Ok(())
 }
 
-pub fn delete_entry_by_date(date: &str) -> Result<()> {
-    let conn = Connection::open("entries.db")?;
+pub fn delete_entry_by_date_from_db(db_file_path: &Path, date: &str) -> Result<()> {
+    let conn = Connection::open(db_file_path)?;
     conn.execute("DELETE FROM entries WHERE date = ?1", [date])?;
     Ok(())
 }
 
-pub fn create_entry_with_now(title: &str, content: Option<&str>, password: Option<&str>, image: Option<&str>) -> Result<()> {
+pub fn create_entry_with_now_in_db(db_file_path: &Path, title: &str, content: Option<&str>, password: Option<&str>, image: Option<&str>) -> Result<()> {
     let date = Local::now().format("%Y-%m-%d").to_string();
     let entry = Entry {
         date,
@@ -160,13 +165,43 @@ pub fn create_entry_with_now(title: &str, content: Option<&str>, password: Optio
         password: password.map(|s| s.to_string()),
         image: image.map(|s| s.to_string()),
     };
-    add_entry(entry)
+    add_entry_to_db(db_file_path, entry)
 }
 
-pub fn create_new_chat_session() -> Result<String> {
-    let conn = Connection::open("entries.db")?;
+#[allow(dead_code)]
+pub fn add_entry(entry: Entry) -> Result<()> {
+    add_entry_to_db(Path::new("entries.db"), entry)
+}
+
+#[allow(dead_code)]
+pub fn get_entries() -> Result<Vec<Entry>> {
+    get_entries_from_db(Path::new("entries.db"))
+}
+
+#[allow(dead_code)]
+pub fn get_entry_by_date(date: &str) -> Result<Option<Entry>> {
+    get_entry_by_date_from_db(Path::new("entries.db"), date)
+}
+
+#[allow(dead_code)]
+pub fn update_entry_by_date(date: &str, new_title: Option<&str>, new_content: Option<&str>, new_password: Option<&str>, new_image: Option<&str>) -> Result<()> {
+    update_entry_by_date_in_db(Path::new("entries.db"), date, new_title, new_content, new_password, new_image)
+}
+
+#[allow(dead_code)]
+pub fn delete_entry_by_date(date: &str) -> Result<()> {
+    delete_entry_by_date_from_db(Path::new("entries.db"), date)
+}
+
+#[allow(dead_code)]
+pub fn create_entry_with_now(title: &str, content: Option<&str>, password: Option<&str>, image: Option<&str>) -> Result<()> {
+    create_entry_with_now_in_db(Path::new("entries.db"), title, content, password, image)
+}
+
+pub fn create_new_chat_session_in_db(db_file_path: &Path) -> Result<String> {
+    let conn = Connection::open(db_file_path)?;
     let session_id = uuid::Uuid::new_v4().to_string();
-    let now = Utc::now().to_rfc3339(); // Or Local::now()
+    let now = Utc::now().to_rfc3339();
     conn.execute(
         "INSERT INTO assistant_chat_sessions (id, created_at, last_modified_at) VALUES (?1, ?2, ?3)",
         params![session_id, now, now],
@@ -174,8 +209,8 @@ pub fn create_new_chat_session() -> Result<String> {
     Ok(session_id)
 }
 
-pub fn save_chat_message(session_id: &str, sender: &str, content: &str) -> Result<()> {
-    let conn = Connection::open("entries.db")?;
+pub fn save_chat_message_in_db(db_file_path: &Path, session_id: &str, sender: &str, content: &str) -> Result<()> {
+    let conn = Connection::open(db_file_path)?;
     let now = Utc::now().to_rfc3339();
 
     if sender == "user" {
@@ -183,9 +218,7 @@ pub fn save_chat_message(session_id: &str, sender: &str, content: &str) -> Resul
             "SELECT title FROM assistant_chat_sessions WHERE id = ?1",
             params![session_id],
             |row| row.get::<_, Option<String>>(0),
-        )
-        .optional()?
-        .flatten();
+        ).optional()?.flatten();
 
         if current_title.is_none() || current_title.as_deref() == Some("") {
              let new_title: String = content.chars().take(50).collect();
@@ -208,6 +241,7 @@ pub fn save_chat_message(session_id: &str, sender: &str, content: &str) -> Resul
              params![now, session_id],
          )?;
     }
+
     conn.execute(
         "INSERT INTO assistant_chat_messages (session_id, sender, content, timestamp) VALUES (?1, ?2, ?3, ?4)",
         params![session_id, sender, content, now],
@@ -215,8 +249,8 @@ pub fn save_chat_message(session_id: &str, sender: &str, content: &str) -> Resul
     Ok(())
 }
 
-pub fn get_all_chat_sessions() -> Result<Vec<ChatSession>> {
-    let conn = Connection::open("entries.db")?;
+pub fn get_all_chat_sessions_from_db(db_file_path: &Path) -> Result<Vec<ChatSession>> {
+    let conn = Connection::open(db_file_path)?;
     let mut stmt = conn.prepare("SELECT id, created_at, last_modified_at, title FROM assistant_chat_sessions ORDER BY last_modified_at DESC")?;
     let iter = stmt.query_map([], |row| {
         Ok(ChatSession {
@@ -226,15 +260,11 @@ pub fn get_all_chat_sessions() -> Result<Vec<ChatSession>> {
             title: row.get(3).optional()?,
         })
     })?;
-    let mut sessions = Vec::new();
-    for session in iter {
-        sessions.push(session?);
-    }
-    Ok(sessions)
+    iter.collect()
 }
 
-pub fn get_messages_for_session(session_id: &str) -> Result<Vec<ChatMessage>> {
-    let conn = Connection::open("entries.db")?;
+pub fn get_messages_for_session_from_db(db_file_path: &Path, session_id: &str) -> Result<Vec<ChatMessage>> {
+    let conn = Connection::open(db_file_path)?;
     let mut stmt = conn.prepare("SELECT id, session_id, sender, content, timestamp FROM assistant_chat_messages WHERE session_id = ?1 ORDER BY timestamp ASC")?;
     let iter = stmt.query_map(params![session_id], |row| {
         Ok(ChatMessage {
@@ -245,29 +275,66 @@ pub fn get_messages_for_session(session_id: &str) -> Result<Vec<ChatMessage>> {
             timestamp: row.get(4)?,
         })
     })?;
-    let mut messages = Vec::new();
-    for msg in iter {
-        messages.push(msg?);
-    }
-    Ok(messages)
+    iter.collect()
 }
 
-pub fn delete_chat_session(session_id: &str) -> Result<()> {
-    let conn = Connection::open("entries.db")?;
+pub fn delete_chat_session_from_db(db_file_path: &Path, session_id: &str) -> Result<()> {
+    let conn = Connection::open(db_file_path)?;
     conn.execute("DELETE FROM assistant_chat_sessions WHERE id = ?1", params![session_id])?;
     Ok(())
+}
+
+#[allow(dead_code)]
+pub fn create_new_chat_session() -> Result<String> {
+    create_new_chat_session_in_db(Path::new("entries.db"))
+}
+
+#[allow(dead_code)]
+pub fn save_chat_message(session_id: &str, sender: &str, content: &str) -> Result<()> {
+    save_chat_message_in_db(Path::new("entries.db"), session_id, sender, content)
+}
+
+#[allow(dead_code)]
+pub fn get_all_chat_sessions() -> Result<Vec<ChatSession>> {
+    get_all_chat_sessions_from_db(Path::new("entries.db"))
+}
+
+#[allow(dead_code)]
+pub fn get_messages_for_session(session_id: &str) -> Result<Vec<ChatMessage>> {
+    get_messages_for_session_from_db(Path::new("entries.db"), session_id)
+}
+
+#[allow(dead_code)]
+pub fn delete_chat_session(session_id: &str) -> Result<()> {
+    delete_chat_session_from_db(Path::new("entries.db"), session_id)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::fs;
+    use std::path::PathBuf;
+
+    fn get_test_db_file_path(test_name: &str) -> PathBuf {
+        let mut path = std::env::temp_dir();
+        path.push("moodjourney_db_tests");
+        
+        fs::create_dir_all(&path).expect("Failed to create temporary test directory for DB");
+        
+        let file_name = format!("test_entries_{}.db", test_name); 
+        path.push(file_name);
+
+        if path.exists() {
+            let _ = fs::remove_file(&path);
+        }
+        path
+    }
 
     #[test]
     fn test_add_and_get_entries() {
-        let _ = fs::remove_file("entries.db");
+        let db_path = get_test_db_file_path("add_and_get_entries");
 
-        init_db().expect("Failed to init DB");
+        init_db_at_path(&db_path).expect("Failed to init DB at test path");
 
         let new_entry = Entry {
             date: "2025-04-20".to_string(),
@@ -277,16 +344,20 @@ mod tests {
             image: Some("images/test_image.jpg".to_string()),
         };
 
-        add_entry(new_entry).expect("Failed to add entry");
+        add_entry_to_db(&db_path, new_entry).expect("Failed to add entry");
 
-        let entries = get_entries().expect("Failed to get entries");
-        assert!(entries.len() > 0);
+        let entries = get_entries_from_db(&db_path).expect("Failed to get entries");
+        
+        assert!(entries.len() > 0, "Expected at least one entry after adding.");
+
+        let _ = fs::remove_file(db_path);
     }
 
     #[test]
     fn test_get_update_delete_entry_by_date() {
-        let _ = fs::remove_file("entries.db");
-        init_db().expect("init failed");
+        let db_path = get_test_db_file_path("get_update_delete_entry");
+
+        init_db_at_path(&db_path).expect("init failed for test path");
 
         let entry = Entry {
             date: "2025-04-21".to_string(),
@@ -296,23 +367,24 @@ mod tests {
             image: None,
         };
 
-        add_entry(entry).expect("add failed");
+        add_entry_to_db(&db_path, entry).expect("add failed");
 
-        let fetched = get_entry_by_date("2025-04-21").expect("get failed").expect("no entry");
+        let fetched = get_entry_by_date_from_db(&db_path, "2025-04-21").expect("get failed").expect("no entry found after add");
         assert_eq!(fetched.title, Some("Initial Title".to_string()));
         assert!(fetched.image.is_none());
 
-        update_entry_by_date("2025-04-21", "Updated", Some("Updated Content"), Some("newpass"), None)
+        update_entry_by_date_in_db(&db_path, "2025-04-21", Some("Updated"), Some("Updated Content"), Some("newpass"), None)
             .expect("update failed");
 
-        let updated = get_entry_by_date("2025-04-21").expect("get failed").expect("no entry");
+        let updated = get_entry_by_date_from_db(&db_path, "2025-04-21").expect("get failed").expect("no entry found after update");
         assert_eq!(updated.title, Some("Updated".to_string()));
         assert_eq!(updated.content.as_deref(), Some("Updated Content"));
 
-        delete_entry_by_date("2025-04-21").expect("delete failed");
+        delete_entry_by_date_from_db(&db_path, "2025-04-21").expect("delete failed");
 
-        let deleted = get_entry_by_date("2025-04-21").expect("get failed");
-        assert!(deleted.is_none());
+        let deleted = get_entry_by_date_from_db(&db_path, "2025-04-21").expect("get failed for deleted entry");
+        assert!(deleted.is_none(), "Entry should be None after deletion.");
+
+        let _ = fs::remove_file(db_path);
     }
-
 }

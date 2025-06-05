@@ -96,7 +96,7 @@ fn main() {
             let content = args.get(4).map(|s| s.as_str());
             let password = args.get(5).map(|s| s.as_str());
 
-            update_entry_by_date(date, title, content, password, None).expect("Failed to update");
+            update_entry_by_date(date, Some(title), content, password, None).expect("Failed to update");
             println!("Entry updated.");
         }
         "delete" => {
