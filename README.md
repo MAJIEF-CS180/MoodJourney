@@ -70,7 +70,7 @@ On Windows, you can download Git, Python, and Visual Studio Code through [Ninite
     - Open a Terminal and run `sudo apt-get install -y libsoup-3.0-dev`.
 
 
-## Installation (Part 2)
+## Installation
 
 **IMPORTANT: If you are on Windows, please use a Developer Command Prompt for VS 2022 for the installation.**
 
