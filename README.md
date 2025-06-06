@@ -47,10 +47,8 @@ On Windows, you can download Git, Python, and Visual Studio Code through [Ninite
 - Xcode Command Line Tools
     - Open a Terminal and run `xcode-select --install`.
 - Homebrew - [Installation](https://brew.sh/)
-- LLVM
-    - Open a Terminal and run `brew install llvm`.
-- CMake
-    - Open a Terminal and run `brew install cmake`.
+- LLVM and CMake
+    - Open a Terminal and run `brew install llvm cmake`.
 
 ### Linux
 
