@@ -120,3 +120,19 @@ npm install
 ```
 npm run tauri dev
 ```
+
+## Running Tests
+
+**IMPORTANT: If you are on Windows, please use a Developer Command Prompt for VS 2022 for running the tests.**
+
+1. To run the test suite, open a Command Prompt/Terminal from the project folder directory. Then, navigate to the `src-tauri` folder.
+
+```
+cd src-tauri
+```
+
+2. Run the following command.
+
+```
+cargo test
+```
